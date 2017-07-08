@@ -58,7 +58,7 @@ jQuery( function($) {
 function getGraph(series,from,to,series_name) {
     // set the dimensions of the canvas
     var margin = {top: 40, right: 20, bottom: 70, left: 40},
-        width = 620 - margin.left - margin.right,
+        width = 960 - margin.left - margin.right,
         height = 480 - margin.top - margin.bottom;
 
     
@@ -71,7 +71,6 @@ function getGraph(series,from,to,series_name) {
     var xAxis = d3.svg.axis()
         .scale(x)
         .orient("bottom")
-    
     
     var yAxis = d3.svg.axis()
         .scale(y)
@@ -89,7 +88,7 @@ function getGraph(series,from,to,series_name) {
     
     
     // load the data
-    d3.json("http://qa.btrtoday.com/json/s3/"+from+"/"+to+"/"+series, function(error, data) {
+    d3.json("http://www.btrtoday.com/json/s3/"+from+"/"+to+"/"+series, function(error, data) {
     
         // converts string to int.
         data.forEach(function(d) {
