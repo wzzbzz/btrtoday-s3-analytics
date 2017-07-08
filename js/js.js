@@ -89,11 +89,12 @@ function getGraph(series,from,to,series_name) {
     
     // load the data
     d3.json("http://www.btrtoday.com/json/s3/"+from+"/"+to+"/"+series, function(error, data) {
-    
+        var total = 0;
         // converts string to int.
         data.forEach(function(d) {
             d[0] = d[0];
             d[1] = +d[1];
+            total += d[1];
         });
         
         
@@ -107,8 +108,8 @@ function getGraph(series,from,to,series_name) {
             .attr("y", 0 - (margin.top / 2))
             .attr("text-anchor", "middle")  
             .style("font-size", "16px") 
-            .style("text-decoration", "underline")  
-            .text(series_name + " " + from + " - " + to);
+            //.style("text-decoration", "underline")  
+            .text(series_name + " " + from + " - " + to + ": "+ total + " total file requests");
             
       // add axis
       svg.append("g")
