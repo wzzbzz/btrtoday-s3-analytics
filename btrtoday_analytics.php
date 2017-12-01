@@ -84,13 +84,24 @@ class BTRtoday_Analytics{
 	public function add_meta_box(){}
 	
 	public function enqueue_scripts(){
-		if(get_current_screen()->id != 'tools_page_btrtoday_analytics'){
+        $pages = array('tools_page_btrtoday_analytics','tools_page_btrtoday_top10');
+		if(!in_array(get_current_screen()->id,$pages)){
 			return;
 		}
+        
+        switch(get_current_screen()->id){
+                case "tools_page_btrtoday_analytics":
+                    wp_enqueue_style('btrtoday-analytics-d3-css',plugin_dir_url( __FILE__ ) .'css/css.css');
+                    break;
+                case "tools_page_btrtoday_top10":
+                    break;
+                default:
+                    break;
+        }
 		 // date picker for selecting range
 		wp_enqueue_script( 'jquery-ui-datepicker' );
 		wp_enqueue_style('btrtoday-admin-ui-css','http://ajax.googleapis.com/ajax/libs/jqueryui/1.9.0/themes/base/jquery-ui.css',false,"1.9.0",false);
-		wp_enqueue_style('btrtoday-analytics-d3-css',plugin_dir_url( __FILE__ ) .'css/css.css');
+		
 		 
 		wp_enqueue_script('d3js', 'http://d3js.org/d3.v3.min.js');
 		wp_enqueue_script('sortable', plugin_dir_url( __FILE__ ) .'js/sorttable.js');
@@ -372,58 +383,70 @@ die;
 	// create new plugin for this
 	function render_btrtop10(){
     
-		$args = array(
-		 'post_type' => 'listen',
-		 'post_status' => 'publish',
-		 'orderby' => 'date',
-		 'order' => 'DESC',
-		 'numberposts'=>-1,
-		 // Using the date_query to filter posts from last week
-		 'date_query' => array(
-			 array(
-				 'after' => '1 week ago'
-			 )
-		 )
-		 );
-		
+        $artist_post_totals = array();
+        global $wpdb;
+
 		$title = "Past 7 days";
 		$is_range = !empty($_GET['from']) && !empty($_GET['to']);
 		if($is_range){
-			 $start = split("-",$_GET['from']);
-			 $end = split("-",$_GET['to']);
-			 
-			 $args['date_query'] = array(
-									 array(
-										   'after'=>array('year'=>$start[0],'month'=>$start[1],'day'=>$start[2]-1),
-										   'before'=>array('year'=>$end[0],'month'=>$end[1],'day'=>$end[2]+1)
-									 )
-								   );
-			 
+			 $start = $_GET['from'];
+			 $end = $_GET['to'];
 			 $title = $_GET['from']." - ".$_GET['to'];
 		}
-		
-		$posts = get_posts($args);
-		$artist_post_totals = array();
-		foreach($posts as $post){
-		 $artists =  get_post_artists($post->ID);
-		 if(!empty($artists)){
-			 foreach($artists as $artist){
-				 $artist_post_totals[$artist->name]["post_count"][] = $post->ID;
-			 }
-		 }
-		 
-		 $playlist = get_field("playlist",$post->ID);
-		 if(!empty($playlist)){
-			 foreach($playlist as $entry){
-				 if(!empty($entry['artist']) && !empty($artist_post_totals[$entry['artist']])){
-					 $artist_post_totals[$entry['artist']]["track_mention"][] = $entry['title'];
-				 }
-			 }
-		  }
-		}
-		
-		uasort($artist_post_totals, 'by_subarray_count');
-	 
+        else{
+            $end = date("Y-m-d",time());
+            $start = date("Y-m-d", time() + 60*60*24*-7);
+        }
+        $sql = $wpdb->prepare("SELECT
+                t.name, count(tr.object_id) as count
+            FROM
+                wp_terms t
+            JOIN wp_term_taxonomy tt ON t.term_id = tt.term_id
+            JOIN wp_term_relationships tr ON tr.term_taxonomy_id = tt.term_taxonomy_id
+            JOIN wp_posts p on tr.object_id = p.ID 
+            WHERE
+                tt.taxonomy = 'artist'
+                AND 
+                p.post_status = 'publish'
+                AND 
+                p.post_date>'%s'
+                AND 
+                p.post_date<'%s'
+            group by 
+                t.name
+            order by count desc",$start, $end);
+        
+        $post_mentions = $wpdb->get_results($sql);
+        
+        foreach($post_mentions as $mention){
+            
+            $artist_post_totals[$mention->name] = array('name'=>$mention->name, 'post_mentions'=>$mention->count);
+        }
+        
+		$sql = $wpdb->prepare("SELECT
+                t.name,
+                count(pm.meta_id) as count
+            FROM
+                wp_terms t
+            JOIN wp_term_taxonomy tt ON t.term_id = tt.term_id
+            JOIN wp_postmeta pm ON t.name = pm.meta_value
+            JOIN wp_posts p ON pm.post_id = p.ID
+            WHERE
+                tt.taxonomy = 'artist'
+            AND p.post_status = 'publish'
+            AND p.post_date > '%s'
+            AND p.post_date < '%s'
+            AND pm.meta_key LIKE 'playlist_%_artist'
+            AND t.name = pm.meta_value
+            group by t.name
+            ORDER BY
+                count DESC
+            ", $start, $end);
+        $playlist_mentions = $wpdb->get_results($sql);
+        
+        foreach($playlist_mentions as $mention){
+            $artist_post_totals[$mention->name]['playlist_mentions'] = $mention->count;
+        }
 		 ?>
 		<div class="wrap">
 		 <h1>BTRToday Top Artists</h1>
@@ -450,14 +473,14 @@ die;
 				 <th>Post Mentions</th>
 				 <th>Playlist Track Appearances</th>
 			 </thead>
-			 <?php $i=0;foreach($artist_post_totals as $name=>$posts):$i++;
+			 <?php foreach($artist_post_totals as $name=>$mentions):;
 			 
 			 ?>
 				 <tr>
 	 
 					 <td><?php echo $name;?></td>
-					 <td style="text-align:center"><?php echo count($posts['post_count']);?></td>
-					 <td style="text-align:center"><?php echo count($posts['track_mention']);?></td>
+					 <td style="text-align:center"><?php echo $mentions['post_mentions'];?></td>
+					 <td style="text-align:center"><?php echo $mentions['playlist_mentions'];?></td>
 			 <?php endforeach;?>    
 		 </table>
 	 
