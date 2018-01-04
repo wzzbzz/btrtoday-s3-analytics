@@ -54,6 +54,7 @@ var bounce,series_name;
         .on( "change", function() {
           to.datepicker( "option", "minDate", getDate( this ) );
         }),
+        
       to = $( "#to" ).datepicker({
         changeMonth: true,
         numberOfMonths: 1,
@@ -61,25 +62,6 @@ var bounce,series_name;
       })
       .on( "change", function() {
         from.datepicker( "option", "maxDate", getDate( this ) );
-      });
-      
-     var series_from = $( "#series-from" )
-        .datepicker({
-          defaultDate: "-1w",
-          changeMonth: true,
-          numberOfMonths: 1,
-          dateFormat: "yy-mm-dd"
-        })
-        .on( "change", function() {
-          series_to.datepicker( "option", "minDate", getDate( this ) );
-        }),
-      series_to = $( "#series-to" ).datepicker({
-        changeMonth: true,
-        numberOfMonths: 1,
-        dateFormat: "yy-mm-dd"
-      })
-      .on( "change", function() {
-        series_from.datepicker( "option", "maxDate", getDate( this ) );
       });
       
  
@@ -129,9 +111,8 @@ function getGraph(json_url,title) {
         
         document.body.style.cursor = "default";    
         var total = 0;
+        
         // converts string to int.
-        
-        
         data.forEach( function(d) {
             d[0] = d[0];
             d[1] = +d[1];
@@ -142,6 +123,7 @@ function getGraph(json_url,title) {
         
         var div =jQuery("<div></div>").attr("overflow-x","scroll").attr("id","text-width").width(1000);
         jQuery("body").append(div);
+        
         var yAxisWidth = d3.max(data,function(d){
             var div = jQuery('#text-width');
             div.text(d[0]);

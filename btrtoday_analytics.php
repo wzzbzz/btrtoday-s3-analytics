@@ -13,19 +13,7 @@ Domain Path: /languages
 */
 
 
-function seed_post_date(){
-			global $wpdb;
-		$sql = "SELECT * from file_series";
-		$results = $wpdb->get_results($sql);
-	    
-		for ($i=0;$i<count($results);$i++)
-		{
-			$post = get_post($results[$i]->post_id);
-			$sql = $wpdb->prepare("UPDATE file_series set post_date = '%s' WHERE post_id='%s'",$post->post_date, $post->ID);
-			$wpdb->query($sql);
-		}
-		die;
-}
+
 function by_subarray_count($a,$b){
     if(count($a["post_count"]) == count($b["post_count"]))
         return 0;
@@ -37,53 +25,31 @@ class BTRtoday_Analytics{
 	const default_page_slug = "btrtoday_analytics";
     //const base = "settings_page_btrtoday_default_recommended_posts";
 	
-	private $current_page;
-	
+	private $current_page;	
 	private $series;
+    private $start;
+    private $end;
 	
 	public function __construct(){
-		$this->init();
+		$this->hooks();
 		$this->register_routes();
 	}
 	
-	public function init(){
+	public function hooks(){
 
 		/* btr daily dashboard */
 		add_action('wp_dashboard_setup', array($this,'add_daily_podcast_downloads_meta_box'));
 		add_action( 'add_meta_boxes', array($this, 'add_meta_box') );
         add_action( 'admin_enqueue_scripts', array( $this,'enqueue_scripts' ) );
         add_action('admin_menu', array($this,'create_menu'));
-      //  add_action('admin_init',array($this,'update_file_series_dates'));
+        add_action('admin_init', array($this, 'init'));
 		
-		$this->set_current_page();
+        // default time-range = previous 7 days for starters.
 		
 	}
-	
-    public function update_file_series_dates(){
-        set_time_limit(0);
-        global $wpdb;
-        $sql = "SELECT * from file_series";
-        $files = $wpdb->get_results($sql);
-        foreach($files as $file){
-            $post = get_post($file->post_id);
-            $sql = $wpdb->prepare("UPDATE file_series SET post_date='%s' WHERE post_id='%s'",$post->post_date, $post->ID);
-            $wpdb->query($sql);
-        }
-        die("done");
-    }
-	private function set_current_page(){
-		if(!empty($_GET['series'])){
-			$this->current_page = "series_detail";
-			$this->series = $_GET['series'];
-		}
-		else{
-			$this->current_page = "overview";
-		}
-	}
-	
-	public function add_meta_box(){}
-	
-	public function enqueue_scripts(){
+    
+    public function enqueue_scripts(){
+        
         $pages = array('tools_page_btrtoday_analytics','tools_page_btrtoday_top10');
 		if(!in_array(get_current_screen()->id,$pages)){
 			return;
@@ -100,6 +66,7 @@ class BTRtoday_Analytics{
         }
 		 // date picker for selecting range
 		wp_enqueue_script( 'jquery-ui-datepicker' );
+        wp_enqueue_script( 'jquery-ui-spinner' );
 		wp_enqueue_style('btrtoday-admin-ui-css','http://ajax.googleapis.com/ajax/libs/jqueryui/1.9.0/themes/base/jquery-ui.css',false,"1.9.0",false);
 		
 		 
@@ -109,13 +76,86 @@ class BTRtoday_Analytics{
 		wp_enqueue_script(
 			'js-js', 
 			plugin_dir_url( __FILE__ ) .'js/js.js', 
-			array('jquery', 'jquery-ui-core', 'jquery-ui-datepicker','d3js'),
+			array('jquery', 'jquery-ui-core', 'jquery-ui-spinner','jquery-ui-datepicker','d3js'),
 			time(),
-			true
+			false
 		);
+        
+        wp_localize_script( 'js-js', 'data', $this->data );
 		
 		
 	}
+    
+    public function init(){
+        
+        // remember to find where to do this properly!
+        $this->seed_post_date();
+        
+        // set the current page
+        $this->set_current_page();
+        $this->set_series();
+        $this->set_date_range();
+        $this->prepare_data();
+    }
+    
+    private function set_date_range(){
+        $now = time();
+		$this->end = empty($_GET['to'])? date("Y-m-d", $now) . " 00:00:00" : $_GET['to'] . " 00:00:00";
+		$this->start = empty($_GET['from']) ? date("Y-m-d", $now - 60*60*24*7) . " 00:00:00" : $_GET['from'] . " 00:00:00";
+    }
+	
+    //NOTE:  Need to find out where to put this in the post_save process where these rows are being created.  Big mystery!!!  head scratcher for sure.
+    public function seed_post_date(){
+        global $wpdb;
+		$sql = "SELECT * from file_series WHERE post_date IS NULL";
+        
+		$results = $wpdb->get_results($sql);
+	    
+		for ($i=0;$i<count($results);$i++)
+		{
+			$post = get_post($results[$i]->post_id);
+			$sql = $wpdb->prepare("UPDATE file_series set post_date = '%s' WHERE post_id='%s'",$post->post_date, $post->ID);
+			$wpdb->query($sql);
+		}
+		
+    }
+
+	private function set_current_page(){
+		if(!empty($_GET['series'])){
+			$this->current_page = "series_detail";
+			$this->series = $_GET['series'];
+		}
+		else{
+			$this->current_page = "overview";
+		}
+	}
+	
+    private function set_series(){
+        if(isset($_GET['series'])){
+            $slug = $_GET['series'];
+            $this->series = get_term_by('slug',$slug,'podcast-series');
+        }
+    }
+    
+    public function prepare_data(){
+        switch($this->current_page){
+            case 'series_detail':
+                $range_data = $this->get_series_range_count_by_post(array($this->start, $this->end),$this->series);
+                foreach($range_data as $i=>$data){
+                    $post = get_post($data->post_id);
+                    $range_data[$i]->post_title=$post->post_title;
+                    $range_data[$i]->post_name = $post->post_name;
+                }
+                $this->data = $range_data;
+                break;
+            case 'overview':
+            default:
+                break;
+        };
+        
+    }
+	public function add_meta_box(){}
+
 	
 	public function create_menu(){
 		add_submenu_page ( "tools.php", "BTRtoday Analytics", "BTRtoday Analytics", "manage_options", "btrtoday_analytics", array($this,"render_btrtoday_analytics") );
@@ -136,9 +176,10 @@ class BTRtoday_Analytics{
 		<div id="graph"></div>
 		
 		<script>
-			var margin = {top: 40, right: 20, bottom:350, left: 40},
-			width = 560 - margin.left - margin.right,
-			height = 800 - margin.top - margin.bottom;
+            
+        var margin = {top: 40, right: 20, bottom:350, left: 40},
+        width = 560 - margin.left - margin.right,
+        height = 800 - margin.top - margin.bottom;
 	
 		
 		// set the ranges
@@ -316,18 +357,12 @@ die;
 
 	private function render_overview(){
 		$series = get_podcast_series();
-		
-		
-		// default time-range = previous 7 days for starters.
-		$now = time();
-		$end = empty($_GET['to'])? date("Y-m-d", $now) . " 00:00:00" : $_GET['to'] . " 00:00:00";
-		$start = empty($_GET['from']) ? date("Y-m-d", $now - 60*60*24*7) . " 00:00:00" : $_GET['from'] . " 00:00:00";
-		
+
 		$total =0;
 		foreach($series as $i=>$s){
-			$total += $series[$i]->total_range_downloads = $this->count_all_series_requests_range($s->term_id, $start, $end);
-			$series[$i]->range_episode_count = $this->count_published_series_posts_in_range($s->term_id, $start, $end);
-			$series[$i]->range_episode_downloads = $this->count_published_series_posts_requests_in_range($s->term_id, $start, $end);
+			$total += $series[$i]->total_range_downloads = $this->count_all_series_requests_range($s->term_id, $this->start, $this->end);
+			$series[$i]->range_episode_count = $this->count_published_series_posts_in_range($s->term_id, $this->start, $this->end);
+			$series[$i]->range_episode_downloads = $this->count_published_series_posts_requests_in_range($s->term_id, $this->start, $this->end);
 		}
 		
 		usort($series,array($this,'sort_series_by_count'));
@@ -338,7 +373,7 @@ die;
 
 		<div style="float:left;padding-right:40px;">
 			
-			<h2><?php echo date("M d, Y",strtotime($start));?> - <?php echo date("M d, Y",strtotime($end));?></h2>
+			<h2><?php echo date("M d, Y",strtotime($this->start));?> - <?php echo date("M d, Y",strtotime($this->end));?></h2>
 			<form action="" method = "get">
 				<input type="hidden" name="page" value="<?php echo $_GET['page'];?>">
 				<h4>select new range</h4>
@@ -368,7 +403,7 @@ die;
 				</tr>
 		<?php foreach ($series as $s):?>
 				<tr>
-					<td style="text-align:left"><?php echo $s->name;?></td>
+					<td style="text-align:left"><a href="<?php echo admin_url(); ?>/tools.php?page=<?php echo BTRtoday_Analytics::default_page_slug;?>&series=<?php echo $s->slug;?>"><?php echo $s->name;?></a></td>
 					<td style="text-align:center"><?php echo $s->total_range_downloads;?></td>
 					<td style="text-align:center"><?php echo $s->range_episode_downloads;?></td>
                     <td style="text-align:center"><?php echo $s->range_episode_count;?></td>
@@ -380,6 +415,183 @@ die;
 		</div>
 	<?php		
 	}
+    
+    private function render_series_detail(){
+         $this->data;
+         $threshold = 1;
+         function filter_data($data,$threshold){
+            
+            
+            foreach($data as $key=>$element){
+                
+                if($element->c>=$threshold){
+                    $new[] = $element;
+                }
+            }
+            
+            
+            return count($new);
+         }
+         while(filter_data($this->data,$threshold) > 20){
+            $threshold = $threshold+1;
+         }
+         
+         
+         
+        ?>
+        <div class="wrap">
+		<h1>Downloads for <?php echo $this->series->name;?></h1>
+        
+        <div style="float:left;padding-right:40px;">
+			
+			<h2><?php echo date("M d, Y",strtotime($this->start));?> - <?php echo date("M d, Y",strtotime($this->end));?></h2>
+			<form action="" method = "get">
+				<input type="hidden" name="page" value="<?php echo $_GET['page'];?>">
+				<h4>select new range</h4>
+				<div>
+					<label for="from">From</label>
+					<input type="text" id="from" name="from">
+					<label for="to">to</label>
+					<input type="text" id="to" name="to">
+					<button id="submit">Go</button>
+				</div>
+			</form>
+            <label for="threshold">Filter Posts Less Than </label><input id='threshold' value="<?php echo $threshold;?>" width="2">
+            <div id="graph">
+                
+            </div>
+        </div>
+        <script>
+         jQuery(document).ready(function(){
+            
+            jQuery("#threshold").spinner({
+                    min:1 
+                }).on( "spinstop", function( event, ui ) {
+                    jQuery("#threshold").trigger("change");
+                } );
+            
+            jQuery("#threshold").on("change",function(){
+                
+                var filtered_data = data.filter(function(datum){
+                        return  datum.c >= document.getElementById("threshold").value;
+                    });
+                do_graph(filtered_data);
+         })
+            
+            
+         });
+         
+        // convert counts to integers.
+        data.forEach(function(d) {
+				d.c = +d.c;
+        });
+        
+        
+        var filtered_data = data.filter(function(datum){
+            return  datum.c >= document.getElementById("threshold").value;
+        
+        });
+       
+        var do_graph = function(filtered_data){
+            var margin = {top: 40, right: 20, bottom:350, left: 40},
+			width = 960 - margin.left - margin.right,
+			height = 800 - margin.top - margin.bottom;
+	
+		
+		// set the ranges
+		var x = d3.scale.ordinal().rangeRoundBands([0, width], .05);
+		
+		var y = d3.scale.linear().range([height, 0]);
+		
+		// define the axis
+		var xAxis = d3.svg.axis()
+			.scale(x)
+			.orient("bottom")
+		
+		var yAxis = d3.svg.axis()
+			.scale(y)
+			.orient("left")
+        
+        d3.select("svg").remove();
+		// add the SVG element
+		var svg = d3.select("#graph").append("svg")
+			.attr("width", width + margin.left + margin.right)
+			.attr("height", height + margin.top + margin.bottom)
+		  .append("g")
+			.attr("transform", 
+				  "translate(" + margin.left + "," + margin.top + ")");
+        
+        // scale the range of the data
+		  x.domain(filtered_data.map(function(d) { return d.post_title; }));
+		  y.domain([0, d3.max(filtered_data, function(d) { return d.c; })]);
+		  
+		  // add axis
+		  svg.append("g")
+			  .attr("class", "x axis")
+			  .attr("transform", "translate(0," + height + ")")
+			  .call(xAxis)
+			.selectAll("text")
+			  .style("text-anchor", "end")
+			  .attr("dx", "-.8em")
+			  .attr("dy", "-.55em")
+			  .attr("transform", "rotate(-90)" );
+		
+		  svg.append("g")
+			  .attr("class", "y axis")
+			  .call(yAxis)
+			.append("text")
+			  .attr("transform", "rotate(-90)")
+			  .attr("y", 5)
+			  .attr("dy", ".71em")
+			  .style("text-anchor", "end")
+			  .text("File Requests");
+              
+          // Add bar chart
+		  svg.selectAll("bar")
+			  .data(filtered_data)
+			.enter().append("rect")
+			  .attr("class", "bar")
+			  .attr("x", function(d) { return x(d.post_title); })
+			  .attr("width", x.rangeBand())
+			  .attr("y", function(d) { return y(d.c); })
+			  .attr("height", function(d) { return height - y(d.c); })
+              .on("mouseover", function() { tooltip.style("display", null); })
+			  .on("mouseout", function() { tooltip.style("display", "none"); })
+			  .on("mousemove", function(d) {
+				  var xPosition = d3.mouse(this)[0] - 25;
+				  var yPosition = d3.mouse(this)[1] - 25;
+				  tooltip.attr("transform", "translate(" + xPosition + "," + yPosition + ")");
+				  tooltip.select("text").text(d.c);
+			  });
+              
+              
+      var tooltip = svg.append("g")
+		.attr("class", "tooltip")
+		.style("display", "none");
+		  
+	  tooltip.append("rect")
+		.attr("width", 60)
+		.attr("height", 20)
+		.attr("fill", "white")
+		.style("opacity", 0.75);
+	
+	  tooltip.append("text")
+		.attr("x", 30)
+		.attr("dy", "1.2em")
+		.style("text-anchor", "middle")
+		.attr("font-size", "12px")
+		.attr("font-weight", "bold");  
+        }
+        
+        do_graph(filtered_data);
+        
+        
+        
+               
+		
+        </script>
+        <?php
+    }
 	// create new plugin for this
 	function render_btrtop10(){
     
@@ -563,6 +775,67 @@ die;
 			return 1;
 		return -1;
 	}
+    
+    public function get_series_range_count_by_day(){
+        
+        $ranges = $this->get_data_range_list($this->start, $this->end, 7);
+        
+        // calculate totals for series within ranges
+        $d = array();
+        foreach($ranges as $range){
+            // get total for range
+            $d[] = $this->get_series_range_count_by_post($range, $this->series->term_id);
+        }
+        
+        return $d;
+    }
+    
+    public function get_data_range_list($start, $end, $count){
+        
+        // rewrite this to do DAYS
+        
+        $start_seconds = strtotime($start);
+        $end_seconds = strtotime($end);
+        
+        $width = ($end_seconds -  $start_seconds) / $count;
+        
+        $ranges = array();
+        for($i = $start_seconds; $i<$end_seconds; $i= $i+$width){
+            $ranges[] = array(date('Y-m-d H:i:s',$i), date('Y-m-d H:i:s',$i+$width),date('Y-m-d H:i:s', $i+$width/2));
+        }
+
+        return $ranges; 
+    
+    }
+    
+    function get_series_range_count_by_post($range, $series){
+    
+        global $wpdb;
+        
+        if(is_object($series)){
+            $series = $series->term_id;
+        }
+        
+        $sql = "SELECT
+                    post_id, count(post_id) c
+                FROM
+                    s3logs s
+                JOIN file_series f ON f.request_key = s.request_key
+                WHERE s.request_time BETWEEN '{$range[0]}'
+                AND '{$range[1]}'
+                AND f.series_id = '{$series}'
+                GROUP BY post_id
+                ORDER BY
+                    c DESC";
+    
+        $result = $wpdb->get_results($sql);
+        
+        if(!empty($result)){
+            
+            return $result;
+        }
+        return;
+    }
 }
 
 
