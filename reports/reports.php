@@ -223,6 +223,7 @@ class SeriesAnalyticsMonthlyReport{
     public function hasBeenRun(){
         global $wpdb;
         $sql = "SELECT * from series_monthly_reports WHERE series_id='{$this->series_id}' AND label='{$this->interval->label}'";
+        die($sql);
         $result= $wpdb->get_results($sql);
         return !empty($result);
     }
@@ -259,8 +260,7 @@ class SeriesAnalyticsMonthlyReport{
                 AND fs.series_id = '{$this->series_id}'
                 AND MONTH(fs.post_date) = '{$this->interval->month}'
                 AND YEAR(fs.post_date) = '{$this->interval->year}'";
-        echo $sql."\n";
-        return;
+        
         $total = $wpdb->get_results($sql);
         $this->monthly_downloads = $total[0]->total;
         
@@ -421,8 +421,7 @@ class SeriesAnalyticsQuarterlyReport{
                 AND MONTH(fs.post_date) >= '{$this->interval->month_start}'
                 AND MONTH(fs.post_date) <= '{$this->interval->month_end}'
                 AND YEAR(fs.post_date) = '{$this->interval->year}'";
-        echo $sql."\n";
-        return;
+        
         $total = $wpdb->get_results($sql);
         $this->monthly_downloads = $total[0]->total;
         
