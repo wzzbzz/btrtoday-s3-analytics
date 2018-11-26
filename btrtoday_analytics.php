@@ -188,13 +188,20 @@ class BTRtoday_Analytics{
 	
 	
 	public function render_series_analytics(){
-		$user_id = get_current_user_id();
-		$user_id=236;
-		$user_series = get_user_podcasts($user_id);
 		
-		if(empty($user_series)){
-			echo "<h3>Current User Not A Podcaster";
-			return;
+		
+		$user_id = get_current_user_id();
+		if($user_id != 1){
+			$user_id=236;
+			$user_series = get_user_podcasts($user_id);
+			
+			if(empty($user_series)){
+				echo "<h3>Current User Not A Podcaster";
+				return;
+			}
+		}
+		else{
+			$user_series = get_podcast_series();
 		}
 		
 		$current_series = empty($_GET['podcast'])?$user_series[0]:get_the_podcast(get_term($_GET['podcast']));
@@ -500,7 +507,7 @@ class BTRtoday_Analytics{
 				</tr>
 		<?php foreach ($series as $s):?>
 				<tr>
-					<td style="text-align:left"><a href="<?php echo admin_url(); ?>/tools.php?page=<?php echo BTRtoday_Analytics::default_page_slug;?>&series=<?php echo $s->slug;?>"><?php echo $s->name;?></a></td>
+					<td style="text-align:left"><a href="<?php echo admin_url(); ?>admin.php?page=series_analytics&podcast=<?php echo $s->term_id;?>"><?php echo $s->name;?></a></td>
 					<td style="text-align:center"><?php echo $s->total_range_downloads;?></td>
 					<td style="text-align:center"><?php echo $s->range_episode_downloads;?></td>
                     <td style="text-align:center"><?php echo $s->range_episode_count;?></td>
@@ -968,6 +975,7 @@ class BTRtoday_Analytics{
 				GROUP BY
 				fs.post_id
 				ORDER BY fs.post_date DESC";
+		
 		$results = $wpdb->get_results($sql);
 		
 		$reports = [];
