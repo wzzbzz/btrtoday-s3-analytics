@@ -51,7 +51,7 @@ class SeriesReportSheet{
         
     }
     
-    public function mark_intialized(){
+    public function mark_initialized(){
         global $wpdb;
         $sql = "UPDATE series_sheet SET intialized='1' WHERE seriesId='{$this->seriesId}'";
         $wpdb->query($sql);

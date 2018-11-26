@@ -544,6 +544,7 @@ class BTRtoday_Analytics{
 			<h2><?php echo date("M d, Y",strtotime($this->start));?> - <?php echo date("M d, Y",strtotime($this->end));?></h2>
 			<form action="" method = "get">
 				<input type="hidden" name="page" value="<?php echo $_GET['page'];?>">
+				<input type="hidden" name="series" value="<?php echo $_GET['series'];?>">
 				<h4>select new range</h4>
 				<div>
 					<label for="from">From</label>
