@@ -1,5 +1,9 @@
 <?php
 
+#wp
+require_once ('wp_load.php');
+
+
 require __DIR__ . "/reports.php";
 
 

@@ -16,4 +16,5 @@
 
 table{border-collapse: collapse;width:80%}
 th, td{ padding:5px;border-bottom: 1px solid black; width:200px }
-th:nth-of-type(1), td:nth-of-type(1){width:350px}
+.overview th:nth-of-type(1), .overview td:nth-of-type(1){width:350px}
+.episodes th:nth-of-type(2), .episodes td:nth-of-type(2){width:500px}

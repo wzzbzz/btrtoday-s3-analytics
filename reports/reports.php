@@ -1,10 +1,8 @@
 <?php
 
-#wp
-require_once ('wp_load.php');
-
 #sheet wrapper
 require __DIR__ . '/sheet.php';
+
 
 
 /*
@@ -223,7 +221,7 @@ class SeriesAnalyticsMonthlyReport{
     public function hasBeenRun(){
         global $wpdb;
         $sql = "SELECT * from series_monthly_reports WHERE series_id='{$this->series_id}' AND label='{$this->interval->label}'";
-        die($sql);
+        
         $result= $wpdb->get_results($sql);
         return !empty($result);
     }
@@ -491,6 +489,8 @@ class SeriesAnalyticsQuarterlyReport{
         }
         
     }
+    
+    
     
 }    
 

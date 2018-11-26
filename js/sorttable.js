@@ -188,7 +188,8 @@ sorttable = {
           } else {
             // looks like a date, but we can't tell which, so assume
             // that it's dd/mm (English imperialism!) and keep looking
-            sortfn = sorttable.sort_ddmm;
+            // yea right.  i changed it to mmdd.  
+            sortfn = sorttable.sort_mmdd;
           }
         }
       }

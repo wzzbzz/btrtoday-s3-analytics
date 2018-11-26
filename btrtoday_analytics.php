@@ -33,16 +33,17 @@ class BTRtoday_Analytics{
 	public function __construct(){
 		$this->hooks();
 		$this->register_routes();
+		
 	}
 	
 	public function hooks(){
 
 		/* btr daily dashboard */
-		add_action('wp_dashboard_setup', array($this,'add_daily_podcast_downloads_meta_box'));
-		add_action( 'add_meta_boxes', array($this, 'add_meta_box') );
+		#add_action( 'wp_dashboard_setup', array( $this,'add_daily_podcast_downloads_meta_box' ));
+		add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ) );
         add_action( 'admin_enqueue_scripts', array( $this,'enqueue_scripts' ) );
-        add_action('admin_menu', array($this,'create_menu'));
-        add_action('admin_init', array($this, 'init'));
+        add_action( 'admin_menu', array( $this,'create_menu' ) );
+        add_action( 'admin_init', array( $this, 'init' ) );
 		
         // default time-range = previous 7 days for starters.
 		
@@ -50,13 +51,15 @@ class BTRtoday_Analytics{
     
     public function enqueue_scripts(){
         
-        $pages = array('tools_page_btrtoday_analytics','tools_page_btrtoday_top10');
+        $pages = array('tools_page_btrtoday_analytics','tools_page_btrtoday_top10','toplevel_page_series_analytics');
+		
 		if(!in_array(get_current_screen()->id,$pages)){
 			return;
 		}
         
         switch(get_current_screen()->id){
                 case "tools_page_btrtoday_analytics":
+				case "toplevel_page_series_analytics":
                     wp_enqueue_style('btrtoday-analytics-d3-css',plugin_dir_url( __FILE__ ) .'css/css.css');
                     break;
                 case "tools_page_btrtoday_top10":
@@ -100,8 +103,16 @@ class BTRtoday_Analytics{
     
     private function set_date_range(){
         $now = time();
+		
+		if($_GET['page'] == 'series_analytics'){
+			$days = 7;  #as per Jeremiah's request
+		}
+		else {
+			$days = 7;
+		}
+		
 		$this->end = empty($_GET['to'])? date("Y-m-d", $now) . " 00:00:00" : $_GET['to'] . " 00:00:00";
-		$this->start = empty($_GET['from']) ? date("Y-m-d", $now - 60*60*24*7) . " 00:00:00" : $_GET['from'] . " 00:00:00";
+		$this->start = empty($_GET['from']) ? date("Y-m-d", $now - 60*60*24*$days) . " 00:00:00" : $_GET['from'] . " 00:00:00";
     }
 	
     //NOTE:  Need to find out where to put this in the post_save process where these rows are being created.  Big mystery!!!  head scratcher for sure.
@@ -158,10 +169,96 @@ class BTRtoday_Analytics{
 
 	
 	public function create_menu(){
+		
+		add_menu_page(
+					  "Series Analytics",
+					  "Series Analytics",
+					  "view_series_analytics",
+					  "series_analytics",
+					  array($this,'render_series_analytics'),
+					  'dashicons-chart-bar'
+					  );
+    
+		
+		#old page
 		add_submenu_page ( "tools.php", "BTRtoday Analytics", "BTRtoday Analytics", "manage_options", "btrtoday_analytics", array($this,"render_btrtoday_analytics") );
 		add_submenu_page ( "tools.php", "BTR Top 10", "BTR Top Artists", "manage_options", "btrtoday_top10", array($this,"render_btrtop10") );
 	}
 	
+	
+	
+	public function render_series_analytics(){
+		$user_id = get_current_user_id();
+		$user_id=236;
+		$user_series = get_user_podcasts($user_id);
+		
+		if(empty($user_series)){
+			echo "<h3>Current User Not A Podcaster";
+			return;
+		}
+		
+		$current_series = empty($_GET['podcast'])?$user_series[0]:get_the_podcast(get_term($_GET['podcast']));
+		
+		$reports = $this->getPodcastSeriesPostReport($current_series->term_id, $this->start, $this->end);
+	
+		?>
+		
+		<div class="wrap episodes">
+		
+		<h1><?php echo $current_series->name;?></h1>
+
+		<div style="float:left;padding-right:40px;">
+			
+			<h2><?php echo date("M d, Y",strtotime($this->start));?> - <?php echo date("M d, Y",strtotime($this->end));?></h2>
+			<form action="" method = "get">
+				<?php if (count($user_series)>1){?>
+				<h4>select new series</h4>
+				<select name="podcast">
+					<?php foreach($user_series as $series):
+					$selected = ($series->term_id ==$_GET['podcast'])?"selected":"";?>
+					<option value="<?php echo $series->term_id;?>" <?php echo $selected;?>><?php echo $series->name;?></option>
+					<?php endforeach;?>
+				</select>	
+				<?php }?>
+				
+				<input type="hidden" name="page" value="<?php echo $_GET['page'];?>">
+				<h4>select new range</h4>
+				<div>
+					<label for="from">From</label>
+					<input type="text" id="from" name="from">
+					<label for="to">to</label>
+					<input type="text" id="to" name="to">
+					
+				</div>
+				<button id="submit">Go</button>
+			</form>
+			<br><br>
+			<table class="sortable">
+				<thead>
+					<th>Ep Date</th>
+					<th style="text-align:left">Ep Title</th>
+					<th>In Range Total</th>
+					<th>All Time total</th>
+				</thead>
+		<?php foreach ($reports as $report):?>
+	
+				<tr>
+					<td style="text-align:center"><?php echo $report->post_date?></td>
+					<td style="text-align:left"><a href="<?php echo $report->url;?>" target="_blank"><?php echo $report->title;?></a></td>
+					<td style="text-align:center"><?php echo $report->downloads;?></td>
+					<td style="text-align:center"><?php echo $report->total_downloads;?></td>
+				</tr>
+		<?php endforeach;?>
+			</table>
+					
+		</div>
+		
+		<?php
+		
+		// now do the html;
+		
+		
+	}
 	
 	public function add_daily_podcast_downloads_meta_box() {
 		global $wp_meta_boxes;
@@ -318,7 +415,7 @@ class BTRtoday_Analytics{
 		}
 		return;
 		// get podcast series;
-die;		
+
     ?>
 
 		<div style="float:left; width:500px">
@@ -367,7 +464,7 @@ die;
 		
 		usort($series,array($this,'sort_series_by_count'));
 		?>
-		<div class="wrap">
+		<div class="wrap overview">
 		
 		<h1>Podcast Downloads</h1>
 
@@ -439,7 +536,7 @@ die;
          
          
         ?>
-        <div class="wrap">
+        <div class="wrap series-detail">
 		<h1>Downloads for <?php echo $this->series->name;?></h1>
         
         <div style="float:left;padding-right:40px;">
@@ -660,7 +757,7 @@ die;
             $artist_post_totals[$mention->name]['playlist_mentions'] = $mention->count;
         }
 		 ?>
-		<div class="wrap">
+		<div class="wrap topartists">
 		 <h1>BTRToday Top Artists</h1>
 		 <form action="tools.php" method="get">
 			 <input type="hidden" name="page" value="btrtoday_top10">
@@ -836,6 +933,55 @@ die;
         }
         return;
     }
+	
+	function getPodcastReport($podcast){
+		global $wpdb;
+		
+		$filename = basename($podcast->src);
+		
+		$sql = "SELECT COUNT(*) as total FROM s3logs WHERE request_key='{$filename}'";
+		
+		$report = new stdClass();
+		$report->title = $podcast->post_title;
+		$report->post_date = date("M d, Y",strtotime($podcast->post_date));
+		$results = $wpdb->get_results($sql);
+		
+		$report->downloads = $wpdb->get_results($sql)[0]->total;
+		
+		return $report;
+	}
+	
+	
+	function getPodcastSeriesPostReport($series_id, $start, $end){
+		global $wpdb;
+		
+		$sql = "SELECT
+					COUNT(s3.id) as downloads, fs.post_id, fs.post_date
+				FROM
+					s3logs s3
+				JOIN file_series fs ON s3.request_key = fs.request_key
+				WHERE
+					s3.request_time BETWEEN '{$start}'
+				AND '{$end}'
+				AND fs.series_id = '{$series_id}'
+				GROUP BY
+				fs.post_id
+				ORDER BY fs.post_date DESC";
+		$results = $wpdb->get_results($sql);
+		
+		$reports = [];
+		foreach($results as $report){
+			$post = postify(get_post($report->post_id));
+			
+			$report->title = $post->post_title;
+			$report->post_date =date("m-d-Y",strtotime($post->post_date));
+			$report->url = $post->permalink;
+			$totalReport = $this->getPodcastReport($post);
+			$report->total_downloads = $totalReport->downloads;
+			$reports[] = $report;
+		}
+		return $reports;
+	}
 }
 
 
