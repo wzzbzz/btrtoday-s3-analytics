@@ -189,9 +189,11 @@ class BTRtoday_Analytics{
 	
 	public function render_series_analytics(){
 		
+		$user = wp_get_current_user();
+		$roles = (( array ) $user->roles);
+		$role = $roles[0];
 		
-		
-		if($user_id != 1){
+		if($role!="administrator"){
 			$user_id = get_current_user_id();
 			$user_series = get_user_podcasts($user_id);
 			
