@@ -14,5 +14,5 @@ if (php_sapi_name() != 'cli') {
 
 
 $reports = new SeriesAnalyticsReports();
-$reports->system_init();
+$reports->run();
 echo "\ndone.\n";
