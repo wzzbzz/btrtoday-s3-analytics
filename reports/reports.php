@@ -22,7 +22,71 @@ class SeriesAnalyticsReports{
     public function __destruct(){}
     
     public function run(){
+        $podcasts = get_podcast_series();
+        $interval = new stdClass();
+        $interval->month = (string) (date("m",time()) - 1);
+        $interval->year = date("Y",time());
+        $interval->label = date("M",time())." ".$interval->year;
+        
+        foreach($podcasts as $podcast){
+            
+            $now = time();
+            
+            $report = new SeriesAnalyticsMonthlyReport($podcast->term_id, $interval);
+            $report->run();
+            
+            # do quarterly stuff.
+            if(!( $interval->month <=3 && $interval->year != 2017 ) && ( $interval->month%3==0 ) ){
+                $quarter = monthToQuarter( $interval->month ) ." " . $interval->year;
+                $report = new SeriesAnalyticsQuarterlyReport($podcast->term_id, $quarter);
+                $report->run();
+            } 
+            
+        }
+        
+                
+        $this->doRankings($interval, "total");
+        $this->doRankings($interval, "monthly");
+        $this->doRankings($interval, "average");
+        
+        foreach($podcasts as $podcast){
+            # create sheet if not there.
+            $sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
+            if( !( $sheet->initialized == 1 ) ){
+                $sheet->init();
+                $sheet->mark_initialized();
+            }
+            $rows = [];
 
+                $formats=[];
+                
+                $report = new SeriesAnalyticsMonthlyReport($podcast->term_id, $interval);
+                $report->loadFromQuery();
+
+                if($interval->month%3==1){
+                    $formats[]='borderBottom';
+                }
+                
+                $sheet->insertRow($report, $formats);
+                
+                
+                if($interval->month%3==0){
+                    if(!($interval->year==2017&&$interval->month==3)){
+                        $q = monthToQuarter($interval->month)." ".$interval->year;
+                        $report = new SeriesAnalyticsQuarterlyReport($podcast->term_id, $q);
+                        $report->loadFromQuery();
+                        
+                        $formats = ['borderBottom','bold', 'italic'];
+
+                        $sheet->insertRow($report, $formats);
+                    }
+                }
+                
+                sleep(5);    
+            
+        }
+        
+        
     }
     
     public function system_init()
@@ -206,6 +270,7 @@ class SeriesAnalyticsMonthlyReport{
     
     public function run(){
         
+
         if(!$this->hasBeenRun()){
             
             $this->totalDownloadsReport();
