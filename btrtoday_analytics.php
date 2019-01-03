@@ -57,6 +57,8 @@ class BTRtoday_Analytics{
 			return;
 		}
         
+		
+		
         switch(get_current_screen()->id){
                 case "tools_page_btrtoday_analytics":
 				case "toplevel_page_series_analytics":
@@ -67,6 +69,7 @@ class BTRtoday_Analytics{
                 default:
                     break;
         }
+		
 		 // date picker for selecting range
 		wp_enqueue_script( 'jquery-ui-datepicker' );
         wp_enqueue_script( 'jquery-ui-spinner' );
@@ -111,7 +114,7 @@ class BTRtoday_Analytics{
 			$days = 7;
 		}
 		
-		$this->end = empty($_GET['to'])? date("Y-m-d", $now) . " 00:00:00" : $_GET['to'] . " 00:00:00";
+		$this->end = empty($_GET['to'])? date("Y-m-d", $now) . " 23:59:59" : $_GET['to'] . " 23:59:59";
 		$this->start = empty($_GET['from']) ? date("Y-m-d", $now - 60*60*24*$days) . " 00:00:00" : $_GET['from'] . " 00:00:00";
     }
 	
@@ -165,7 +168,6 @@ class BTRtoday_Analytics{
         };
         
     }
-	public function add_meta_box(){}
 
 	
 	public function create_menu(){
@@ -188,6 +190,8 @@ class BTRtoday_Analytics{
 	
 	
 	public function render_series_analytics(){
+		
+		set_time_limit(0);
 		
 		$user = wp_get_current_user();
 		$roles = (( array ) $user->roles);
@@ -462,8 +466,10 @@ class BTRtoday_Analytics{
 	}
 
 	private function render_overview(){
+		set_time_limit(0);
+		
 		$series = get_podcast_series();
-
+		
 		$total =0;
 		foreach($series as $i=>$s){
 			$total += $series[$i]->total_range_downloads = $this->count_all_series_requests_range($s->term_id, $this->start, $this->end);
@@ -977,6 +983,7 @@ class BTRtoday_Analytics{
 				GROUP BY
 				fs.post_id
 				ORDER BY fs.post_date DESC";
+		
 		$results = $wpdb->get_results($sql);
 		
 		$reports = [];
@@ -988,8 +995,11 @@ class BTRtoday_Analytics{
 			$report->url = $post->permalink;
 			$totalReport = $this->getPodcastReport($post);
 			$report->total_downloads = $totalReport->downloads;
+			
 			$reports[] = $report;
+			
 		}
+		
 		return $reports;
 	}
 }
