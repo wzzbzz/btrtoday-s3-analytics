@@ -470,9 +470,9 @@ class BTRtoday_Analytics{
 		
 		$series = get_podcast_series();
 		
-		$total =0;
+		$total = $this->total_requests_range($this->start, $this->end);
 		foreach($series as $i=>$s){
-			$total += $series[$i]->total_range_downloads = $this->count_all_series_requests_range($s->term_id, $this->start, $this->end);
+			$series[$i]->total_range_downloads = $this->count_all_series_requests_range($s->term_id, $this->start, $this->end);
 			$series[$i]->range_episode_count = $this->count_published_series_posts_in_range($s->term_id, $this->start, $this->end);
 			$series[$i]->range_episode_downloads = $this->count_published_series_posts_requests_in_range($s->term_id, $this->start, $this->end);
 		}
@@ -813,6 +813,13 @@ class BTRtoday_Analytics{
 		 <?php
 	 }   
 
+	public function total_requests_range($start, $end){
+		global $wpdb;
+		$sql = $wpdb->prepare("SELECT count(id) as total FROM s3logs WHERE request_time BETWEEN '%s' AND '%s'", $start, $end);
+		$results = $wpdb->get_results($sql);
+		return $results[0]->total;
+	}
+	
 	public function count_all_series_requests_range($series_id, $start, $end){
 		
 		global $wpdb;
