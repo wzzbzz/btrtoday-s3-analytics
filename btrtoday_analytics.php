@@ -40,7 +40,7 @@ class BTRtoday_Analytics{
 
 		/* btr daily dashboard */
 		#add_action( 'wp_dashboard_setup', array( $this,'add_daily_podcast_downloads_meta_box' ));
-		add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ) );
+		//add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ) );
         add_action( 'admin_enqueue_scripts', array( $this,'enqueue_scripts' ) );
         add_action( 'admin_menu', array( $this,'create_menu' ) );
         add_action( 'admin_init', array( $this, 'init' ) );
