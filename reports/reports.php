@@ -21,71 +21,148 @@ class SeriesAnalyticsReports{
     }
     public function __destruct(){}
     
-    public function run(){
-        $podcasts = get_podcast_series();
-        $interval = new stdClass();
-        $interval->month = (string) (date("m",time()) - 1);
-        $interval->year = date("Y",time());
-        $interval->label = date("M",time())." ".$interval->year;
-        
-        foreach($podcasts as $podcast){
-            
-            $now = time();
-            
+	public function fix(){
+		
+		$podcasts = get_podcast_series();
+		
+		echo "\n";
+		foreach($podcasts as $podcast){
+			
+			echo "fixing {$podcast->name}\n";
+			$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);			
+			$rows = $sheet->getRowCount();
+			echo "\t{$rows} found\n";
+			$over = $rows - 27;
+			if($over>0){
+				echo "\tdeleting top $over rows for {$podcast->name}\n";
+				$sheet->removeTopNRows($over);
+			}
+			else{
+				echo "\tNo rows deleted\n";
+			}
+			
+			
+		
+		}
+		
+		
+		
+		$interval = $this->getInterval("10","2018");
+		
+		$this->runInterval($interval);
+		
+		$interval = $this->getInterval("11","2018");
+		
+		$this->runInterval($interval);
+		
+		$interval = $this->getInterval("12","2018");
+		$this->runInterval($interval);
+	
+		echo "\n";
+	}
+	
+	public function runInterval($interval){
+		
+		$podcasts = get_podcast_series();
+		
+		foreach($podcasts as $podcast){
+			
             $report = new SeriesAnalyticsMonthlyReport($podcast->term_id, $interval);
             $report->run();
             
             # do quarterly stuff.
             if(!( $interval->month <=3 && $interval->year != 2017 ) && ( $interval->month%3==0 ) ){
+				
                 $quarter = monthToQuarter( $interval->month ) ." " . $interval->year;
                 $report = new SeriesAnalyticsQuarterlyReport($podcast->term_id, $quarter);
                 $report->run();
-            } 
-            
-        }
-        
-                
-        $this->doRankings($interval, "total");
-        $this->doRankings($interval, "monthly");
-        $this->doRankings($interval, "average");
-        
-        foreach($podcasts as $podcast){
-            # create sheet if not there.
-            $sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
-            if( !( $sheet->initialized == 1 ) ){
-                $sheet->init();
-                $sheet->mark_initialized();
             }
-            $rows = [];
+		}
+		echo "reports run\n";
+		
+		$this->doRankings($interval, "total");
+		$this->doRankings($interval, "monthly");
+		$this->doRankings($interval, "average");
+		echo "rankings done\n";
+			
+		echo "updating sheets\n";
+		foreach($podcasts as $podcast){
 
-                $formats=[];
-                
-                $report = new SeriesAnalyticsMonthlyReport($podcast->term_id, $interval);
-                $report->loadFromQuery();
+			# create sheet if not there.
+			$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
+			if( !( $sheet->initialized == 1 ) ){
+				echo "\tinitializing sheet:  {$podcast->name}\n";
+				$sheet->init();
+				$sheet->mark_initialized();
+			}
+			$rows = [];
 
-                if($interval->month%3==1){
-                    $formats[]='borderBottom';
-                }
-                
-                $sheet->insertRow($report, $formats);
-                
-                
-                if($interval->month%3==0){
-                    if(!($interval->year==2017&&$interval->month==3)){
-                        $q = monthToQuarter($interval->month)." ".$interval->year;
-                        $report = new SeriesAnalyticsQuarterlyReport($podcast->term_id, $q);
-                        $report->loadFromQuery();
-                        
-                        $formats = ['borderBottom','bold', 'italic'];
+				$formats=[];
+				
+				$report = new SeriesAnalyticsMonthlyReport($podcast->term_id, $interval);
+				$report->loadFromQuery();
 
-                        $sheet->insertRow($report, $formats);
-                    }
-                }
-                
-                sleep(5);    
+				if($interval->month%3==1){
+					$formats[]='borderBottom';
+				}
+				
+				$sheet->insertRow($report, $formats);
+				echo "\t$interval->label inserted\n";
+				
+				if($interval->month%3==0){
+					if(!($interval->year==2017&&$interval->month==3)){
+						$q = monthToQuarter($interval->month)." ".$interval->year;
+						$report = new SeriesAnalyticsQuarterlyReport($podcast->term_id, $q);
+						$report->loadFromQuery();
+						
+						$formats = ['borderBottom','bold', 'italic'];
+
+						$sheet->insertRow($report, $formats);
+						echo "\t$q inserted\n";
+					}
+				}
+				
+				sleep(10);    
+			
+		}
+		
+			
+	}
+	
+	public function getInterval($month=null, $year=null){
+		
+		$interval = new stdClass();
+        $interval->month = $month?$month:(string) (date("m",time()) - 1);
+        $interval->year = $year?$year:date("Y",time());
+		
+		/* detect year change / month reset, and adjust interval. */
+		if($interval->month==0){
+			$interval->month=12;
+			$interval->year--;
+		}
+		
+		##$text = date("F", strtotime("2001-" . $month . "-01"));
+		
+		$interval->label = date("M",strtotime("2001-".$interval->month."-01"))." ".$interval->year;
+		
+		return $interval;
+		
+	}
+	
+    public function run(){
+		
+		echo "\n";
+		echo "Running BTRtoday Monthly Google Sheets Update\n";
+		
+        
+        $interval = $this->getInterval($month, $year);
+		$this->runInterval();
+        echo "Running Podcast Reports (".count($podcasts).")";
+        foreach($podcasts as $i=>$podcast){
+            echo "\t {$i}: {$podcast->name}\n";
+			$this->runInterval($interval);
             
         }
-        
         
     }
     
@@ -260,7 +337,7 @@ class SeriesAnalyticsMonthlyReport{
     public function __construct($series_id,$interval){
         $this->series_id = $series_id;
         $this->interval = $interval;
-        
+
         if($this->hasBeenRun()){
             $this->loadFromQuery();
         }
@@ -269,10 +346,9 @@ class SeriesAnalyticsMonthlyReport{
     public function __destruct(){}
     
     public function run(){
-        
 
         if(!$this->hasBeenRun()){
-            
+            echo "\t\t Running Report for {$this->interval->label}\n";
             $this->totalDownloadsReport();
             $this->monthlyDownloadsReport();
             $this->monthlyEpisodesReport();
@@ -280,11 +356,15 @@ class SeriesAnalyticsMonthlyReport{
             $this->insert();
             
         }
+		else{
+			echo "\t\t {$this->interval->label} already run.";
+		}
         
     }
     
     public function hasBeenRun(){
         global $wpdb;
+		
         $sql = "SELECT * from series_monthly_reports WHERE series_id='{$this->series_id}' AND label='{$this->interval->label}'";
         
         $result= $wpdb->get_results($sql);
@@ -350,7 +430,7 @@ class SeriesAnalyticsMonthlyReport{
     
     public function insert(){
         global $wpdb;
-        
+
         $sql = "INSERT INTO series_monthly_reports (
                     series_id,
                     label,
@@ -423,6 +503,7 @@ class SeriesAnalyticsQuarterlyReport{
         $this->interval->month_end = ($this->interval->quarter*3);
         
         if($this->hasBeenRun()){
+			echo "\t\t Quarterly Report $quarter has been run\n";
             $this->loadFromQuery();
         }
         
@@ -438,7 +519,6 @@ class SeriesAnalyticsQuarterlyReport{
      public function run(){
         
         if(!$this->hasBeenRun()){
-            
             echo $this->series_id.":".$this->interval->label."\n";
             $this->totalDownloadsReport();
             $this->monthlyDownloadsReport();
@@ -446,6 +526,9 @@ class SeriesAnalyticsQuarterlyReport{
             $this->calculateAverages();
             $this->insert();    
         }
+		else {
+			echo $this->series_id.":".$this->interval->label." has been run\n";
+		}
         
     }
     

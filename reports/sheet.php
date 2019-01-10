@@ -41,7 +41,7 @@ class SeriesReportSheet{
         $this->title = $series_sheet?$series_sheet->title:$title;
         $this->spreadsheetId = $series_sheet?$series_sheet->spreadsheetId:"";
         $this->initialized = $series_sheet?$series_sheet->initialized:0;
-        
+
         $this->client = getClient();
         $this->service= new Google_Service_Sheets($this->client);
         
@@ -71,6 +71,36 @@ class SeriesReportSheet{
         }
         
     }
+    
+    public function getRowCount(){
+        $response = $this->service->spreadsheets_values->get($this->spreadsheetId, "Sheet1");
+        return count($response->values);
+    }
+    public function removeTopNRows($n=1){
+        $start = 2;
+        $end = $start+$n;
+        $requests =[
+            new Google_Service_Sheets_Request(
+            [
+                "deleteDimension"=>[
+                "range"=>[
+                     "dimension"=> "ROWS",
+                     "startIndex"=> $start,
+                     "endIndex"=> $end
+                 ],
+                ]
+             ]
+            )];
+        
+        $batchUpdateRequest = new Google_Service_Sheets_BatchUpdateSpreadsheetRequest([
+            'requests' => $requests
+        ]);
+    
+        $result = $this->service->spreadsheets->batchUpdate($this->spreadsheetId, $batchUpdateRequest);
+        
+    }
+    
+    
     public function init(){
         
         if(empty($this->spreadsheetId)){
