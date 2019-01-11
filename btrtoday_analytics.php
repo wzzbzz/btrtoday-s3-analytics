@@ -207,7 +207,7 @@ class BTRtoday_Analytics{
 			}
 		}
 		else{
-			$user_series = get_podcast_series();
+			$user_series = get_podcast_series(false);
 		}
 		
 		$current_series = empty($_GET['podcast'])?$user_series[0]:get_the_podcast(get_term($_GET['podcast']));
@@ -468,14 +468,21 @@ class BTRtoday_Analytics{
 	private function render_overview(){
 		set_time_limit(0);
 		
-		$series = get_podcast_series();
+		$series = get_podcast_series(false);
 		
 		$total = $this->total_requests_range($this->start, $this->end);
 		foreach($series as $i=>$s){
+			
 			$series[$i]->total_range_downloads = $this->count_all_series_requests_range($s->term_id, $this->start, $this->end);
-			$series[$i]->range_episode_count = $this->count_published_series_posts_in_range($s->term_id, $this->start, $this->end);
-			$series[$i]->range_episode_downloads = $this->count_published_series_posts_requests_in_range($s->term_id, $this->start, $this->end);
+			if($s->is_active){
+				$active_total+= $series[$i]->total_range_downloads;
+				$series[$i]->range_episode_count = $this->count_published_series_posts_in_range($s->term_id, $this->start, $this->end);
+				$series[$i]->range_episode_downloads = $this->count_published_series_posts_requests_in_range($s->term_id, $this->start, $this->end);
+			}
+			
+			
 		}
+		
 		
 		usort($series,array($this,'sort_series_by_count'));
 		?>
@@ -513,9 +520,22 @@ class BTRtoday_Analytics{
                     <td style="text-align:center;">N/A</td>
                     <td style="text-align:center;">N/A</td>
 				</tr>
+				<tr>
+					<td style="text-align:left">ACTIVE TOTAL</td>
+					<td style="text-align:center;"><?php echo $active_total;?></td>
+					<td style="text-align:center;">N/A</td>
+                    <td style="text-align:center;">N/A</td>
+                    <td style="text-align:center;">N/A</td>
+				</tr>
 		<?php foreach ($series as $s):?>
 				<tr>
-					<td style="text-align:left"><a href="<?php echo admin_url(); ?>/admin.php?page=series_analytics&podcast=<?php echo $s->term_id;?>"><?php echo $s->name;?></a></td>
+					<td style="text-align:left">
+						<?php if($s->is_active):?>
+						<a href="<?php echo admin_url(); ?>/admin.php?page=series_analytics&podcast=<?php echo $s->term_id;?>"><?php echo $s->name;?></a>
+						<?php else:?>
+						<?php echo $s->name;?> ** inactive
+						<?php endif;?>
+					</td>
 					<td style="text-align:center"><?php echo $s->total_range_downloads;?></td>
 					<td style="text-align:center"><?php echo $s->range_episode_downloads;?></td>
                     <td style="text-align:center"><?php echo $s->range_episode_count;?></td>
