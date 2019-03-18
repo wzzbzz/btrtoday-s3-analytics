@@ -73,7 +73,7 @@ class BTRtoday_Analytics{
 		 // date picker for selecting range
 		wp_enqueue_script( 'jquery-ui-datepicker' );
         wp_enqueue_script( 'jquery-ui-spinner' );
-		wp_enqueue_style('btrtoday-admin-ui-css','http://ajax.googleapis.com/ajax/libs/jqueryui/1.9.0/themes/base/jquery-ui.css',false,"1.9.0",false);
+		wp_enqueue_style('btrtoday-admin-ui-css','https://ajax.googleapis.com/ajax/libs/jqueryui/1.9.0/themes/base/jquery-ui.css',false,"1.9.0",false);
 		
 		 
 		wp_enqueue_script('d3js', 'http://d3js.org/d3.v3.min.js');
@@ -87,7 +87,7 @@ class BTRtoday_Analytics{
 			false
 		);
         
-        wp_localize_script( 'js-js', 'data', $this->data );
+        //wp_localize_script( 'js-js', 'data', $this->data );
 		
 		
 	}
@@ -107,7 +107,7 @@ class BTRtoday_Analytics{
     private function set_date_range(){
         $now = time();
 		
-		if($_GET['page'] == 'series_analytics'){
+		if( isset( $_GET['page'] ) && $_GET['page'] == 'series_analytics'){
 			$days = 7;  #as per Jeremiah's request
 		}
 		else {
