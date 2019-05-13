@@ -1,4 +1,4 @@
-<?php
+\<?php
 
 // we are using wpdb for our queries at this point, for expedience sake.
 
@@ -37,14 +37,14 @@ class SeriesReportSheet{
         $this->seriesId = $seriesId;
         
         $series_sheet = $this->querySpreadsheet();
-        
+
         $this->title = $series_sheet?$series_sheet->title:$title;
         $this->spreadsheetId = $series_sheet?$series_sheet->spreadsheetId:"";
         $this->initialized = $series_sheet?$series_sheet->initialized:0;
 
         $this->client = getClient();
         $this->service= new Google_Service_Sheets($this->client);
-        
+
     }
     
     public function __destruct(){
@@ -141,7 +141,56 @@ class SeriesReportSheet{
         
     }
     
+    public function updateExistingRow($rowNumber, $rowData){
+             $valueInputOption = "RAW";
+        $params = [
+            'valueInputOption' => $valueInputOption
+        ];
+
+        $data = [
+            new Google_Service_Sheets_ValueRange([
+                'range' => "A".$rowNumber,
+                'values' => [[$rowData->interval->label]]
+                ]),
+            new Google_Service_Sheets_ValueRange([
+                'range' => "B".$rowNumber,
+                'values' => [[$rowData->total_downloads]]
+                ]),
+            new Google_Service_Sheets_ValueRange([
+                'range' => "C".$rowNumber,
+                'values' => [[$rowData->total_rank]]
+                ]),
+            new Google_Service_Sheets_ValueRange([
+                'range' => "D".$rowNumber,
+                'values' => [[$rowData->monthly_downloads]]
+                ]),
+            new Google_Service_Sheets_ValueRange([
+                'range' => "E".$rowNumber,
+                'values' => [[$rowData->monthly_rank]]
+                ]),
+            new Google_Service_Sheets_ValueRange([
+                'range' => "F".$rowNumber,
+                'values' => [[$rowData->monthly_episodes]]
+                ]),
+            new Google_Service_Sheets_ValueRange([
+                'range' => "G".$rowNumber,
+                'values' => [[$rowData->average_downloads]]
+                ]),
+            new Google_Service_Sheets_ValueRange([
+                'range' => "H".$rowNumber,
+                'values' => [[$rowData->average_rank]]
+                ]),
+        ];
+	
+	$body = new Google_Service_Sheets_BatchUpdateValuesRequest([
+            'valueInputOption' => $valueInputOption,
+            'data' => $data
+        ]);
+	$result = $this->service->spreadsheets_values->batchUpdate($this->spreadsheetId, $body);        
+
+    }
     
+
     public function insertRow($row, $formats=[]){
         
         /* insert row at top of sheet */
@@ -335,6 +384,7 @@ class SeriesReportSheet{
         
     }
     
+
     public function createReportSpreadsheet($title){
        
        $spreadsheet = new Google_Service_Sheets_Spreadsheet([

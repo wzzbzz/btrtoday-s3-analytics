@@ -26,10 +26,18 @@ class SeriesAnalyticsReports{
 		$podcasts = get_podcast_series();
 		
 		echo "\n";
-		foreach($podcasts as $podcast){
+/*		foreach($podcasts as $podcast){
 			
 			echo "fixing {$podcast->name}\n";
-			$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);			
+
+			$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
+                        if( !( $sheet->initialized == 1 ) ){
+                                echo "\tinitializing sheet:  {$podcast->name}\n";
+                                $sheet->init();
+                                $sheet->mark_initialized();
+                        }
+
+
 			$rows = $sheet->getRowCount();
 			echo "\t{$rows} found\n";
 			$over = $rows - 27;
@@ -45,19 +53,47 @@ class SeriesAnalyticsReports{
 		
 		}
 		
+*/		
 		
+//		$interval = $this->getInterval("01","2019");
 		
-		$interval = $this->getInterval("10","2018");
+//		$this->runInterval($interval);
 		
-		$this->runInterval($interval);
+//		$interval = $this->getInterval("02","2019");
 		
-		$interval = $this->getInterval("11","2018");
+//		$this->runInterval($interval);
 		
-		$this->runInterval($interval);
-		
-		$interval = $this->getInterval("12","2018");
-		$this->runInterval($interval);
+//		$interval = $this->getInterval("03","2019");
+//		$this->runInterval($interval);
 	
+//                $interval = $this->getInterval("04","2019");
+//                $this->runInterval($interval);
+
+		$podcasts = get_podcast_series();
+		
+		$q = "Q1 2019";
+
+		$this->doQuarterlyRankings($q,'average');
+		$this->doQuarterlyRankings($q,'monthly');
+		$this->doQuarterlyRankings($q, 'total');
+
+		foreach($podcasts as $pod){
+			$r = new SeriesAnalyticsQuarterlyReport($pod->term_id, $q);
+		 	if(!$r->hasBeenRun()){
+				$r->run();
+			}
+		
+			$r->loadFromQuery();
+
+			$sheet = new SeriesReportSheet($pod->term_id, $pod->name);
+                        if( !( $sheet->initialized == 1 ) ){
+                                echo "\tinitializing sheet:  {$podcast->name}\n";
+                                $sheet->init();
+                                $sheet->mark_initialized();
+                        }
+			$sheet->updateExistingRow(4,$r);
+		}
+
 		echo "\n";
 	}
 	
@@ -156,6 +192,8 @@ class SeriesAnalyticsReports{
 		
         
         $interval = $this->getInterval($month, $year);
+var_dump($interval);
+die;
 		$this->runInterval();
         echo "Running Podcast Reports (".count($podcasts).")";
         foreach($podcasts as $i=>$podcast){
@@ -281,7 +319,26 @@ class SeriesAnalyticsReports{
         
     }
    
-    
+    private function doQuarterlyRankings($q, $field){
+	global $wpdb;
+
+	if(!in_array($field, array('total', 'monthly', 'average'))){
+		return false;
+	}
+		
+	$sql = "SELECT * from series_quarterly_reports WHERE label='{$q}' ORDER BY {$field}_downloads DESC";
+        $rankings = $wpdb->get_results($sql);
+        
+        
+        foreach($rankings as $i=>$rowinfo){
+                $rank=$i+1;
+                $sql = "UPDATE series_quarterly_reports SET {$field}_rank='$rank' WHERE ID='{$rowinfo->ID}'";
+                $wpdb->query($sql);
+            }
+			
+	}
+
+
     private function getIntervals($series_id){
         global $wpdb;
         
