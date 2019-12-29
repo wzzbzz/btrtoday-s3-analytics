@@ -386,7 +386,52 @@ class SeriesAnalyticsReports{
 		}
 		
 		// update spreadsheets
-		
+		foreach($podcasts as $podcast){
+			
+			$current_interval = $this->increment_interval($last_sheet_interval);
+			
+			while( $this->interval_compare( $current_interval , $last_interval ) < 1 ){
+				
+				# create sheet if not there.
+				$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
+				
+				if( !( $sheet->initialized == 1 ) ){
+					echo "\tinitializing sheet:  {$podcast->name}\n";
+					$sheet->init();
+					$sheet->mark_initialized();
+				}
+				
+				$rows = [];
+				$formats=[];
+				
+				$report = new SeriesAnalyticsMonthlyReport($podcast->term_id, $interval);
+				$report->loadFromQuery();
+var_dump($report);
+die;
+				if($interval->month%3==1){
+					$formats[]='borderBottom';
+				}
+				
+				$sheet->insertRow($report, $formats);
+				echo "\t$interval->label inserted\n";
+				
+				if($interval->month%3==0){
+					if(!($interval->year==2017&&$interval->month==3)){
+						$q = monthToQuarter($interval->month)." ".$interval->year;
+						$report = new SeriesAnalyticsQuarterlyReport($podcast->term_id, $q);
+						$report->loadFromQuery();
+						
+						$formats = ['borderBottom','bold', 'italic'];
+
+						$sheet->insertRow($report, $formats);
+						echo "\t$q inserted\n";
+					}
+				}
+				
+				sleep(10);    
+				
+			}
+		}
 		
 	}
 	
