@@ -387,6 +387,13 @@ class SeriesAnalyticsReports{
 		
 		// update spreadsheets
 		foreach($podcasts as $podcast){
+			try{
+				$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
+			}
+			catch(Google_Service_Exception $e){
+				var_dump($e);
+				die;
+			}
 			$last_sheet_interval = $this->intervalFromLabel( $sheet->getLatestInterval() );
 			echo "updating {$podcast->name}	sheet\n";
 			$current_interval = $this->increment_interval($last_sheet_interval);
