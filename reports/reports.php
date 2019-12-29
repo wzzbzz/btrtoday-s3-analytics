@@ -340,7 +340,7 @@ class SeriesAnalyticsReports{
     private function updateSheets(){
 
 		// update podcast data
-		$podcasts = get_podcast_series();
+		/*$podcasts = get_podcast_series();
 		foreach($podcasts as $podcast){
 			echo $podcast->name."\n";
 			
@@ -383,12 +383,15 @@ class SeriesAnalyticsReports{
 			}
 		
 		
-		}
+		}*/
 		
 		// update spreadsheets
 		foreach($podcasts as $podcast){
 			echo "updating {$podcqst->name}	sheet\n";
 			$current_interval = $this->increment_interval($last_sheet_interval);
+			var_dump( $current_interval );
+			var_dump( $last_sheet_interval );
+			var_dump( $this->interval_compare( $current_interval , $last_interval ) );
 			var_dump($this->interval_compare( $current_interval , $last_interval ) < 1 );
 			die;
 			while( $this->interval_compare( $current_interval , $last_interval ) < 1 ){
