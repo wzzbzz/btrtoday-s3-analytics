@@ -97,13 +97,10 @@ class SeriesAnalyticsReports{
 		echo "\n";
 	}
 	
-	public function runInterval($interval){
+	
+	public function runPodcastInterval($podcast, $interval){
 		
-		$podcasts = get_podcast_series();
-		
-		foreach($podcasts as $podcast){
-			
-            $report = new SeriesAnalyticsMonthlyReport($podcast->term_id, $interval);
+		$report = new SeriesAnalyticsMonthlyReport($podcast->term_id, $interval);
             $report->run();
             
             # do quarterly stuff.
@@ -113,6 +110,17 @@ class SeriesAnalyticsReports{
                 $report = new SeriesAnalyticsQuarterlyReport($podcast->term_id, $quarter);
                 $report->run();
             }
+			
+			
+	}
+	public function runInterval($interval){
+		
+		$podcasts = get_podcast_series();
+		
+		foreach($podcasts as $podcast){
+			
+			$this->runPodcastInterval( $podcast, $interval );
+           
 		}
 		echo "reports run\n";
 		
@@ -191,13 +199,15 @@ class SeriesAnalyticsReports{
 		echo "Running BTRtoday Monthly Google Sheets Update\n";
 		
         
-        $interval = $this->getInterval($month, $year);
-var_dump($interval);
-die;
-		$this->runInterval();
+		$this->updateSheets();
+		die;
+		$this->doRankings();
+		$this->doQuarterlyRankings();
+		return;
         echo "Running Podcast Reports (".count($podcasts).")";
         foreach($podcasts as $i=>$podcast){
             echo "\t {$i}: {$podcast->name}\n";
+			$this->updatePodcastSheet($podcast);
 			$this->runInterval($interval);
             
         }
@@ -287,11 +297,102 @@ die;
         
             
     }
-            
-        
+	
+	// takes a string e.g. "Apr 2019" and returns an interval object
+	// with month, year, and label members.
+	private function intervalFromLabel($label){
+		$parts = explode(" " ,$label);
+		$interval = $this->getInterval( date( "m" , strtotime( $parts[0] ." " . $parts[1] ) ), $parts[1] ) ;
+		return $interval;
+		
+	}
+	
+	// compare two intervals.
+	// -1, interval1 < interval2
+	// 0 interval1 == interval2
+	// 1 interval1 > interval2
+	private function interval_compare( $interval1 , $interval2 ){
+		
+		if( $interval1->year == $interval2->year ){
+			if( $interval1->month == $interval2->month ){
+				return 0;
+			}
+			return ($interval1->month > $interval2->month)?1:-1;
+		}
+		else{
+			return ( $interval1->year > $interval2->year)?1:-1;
+		}
+	}
+	
+	
+	private function increment_interval( $interval ){
+		$interval->month++;
+		if( $interval->month > 12 ){
+			$interval->month = 1;
+			$interval->year++;
+		}
+		
+		$interval = $this->getInterval( $interval->month, $interval->year);
+		
+		return $interval;
+	}
+	
+    private function updateSheets(){
+
+		// update podcast data
+		$podcasts = get_podcast_series();
+		foreach($podcasts as $podcast){
+			echo $podcast->name."\n";
+			
+			try{
+				$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
+			}
+			catch(Google_Service_Exception $e){
+				var_dump($e);
+				die;
+			}
+			
+			// find out where we left off.
+			$last_sheet_interval = $this->intervalFromLabel( $sheet->getLatestInterval() );
+			sleep(5);
+			
+			$current_interval = $this->increment_interval($last_sheet_interval);
+			
+			$last_interval = $this->getInterval();
+			while( $this->interval_compare( $current_interval , $last_interval ) < 1 ){
+				$this->runPodcastInterval( $podcast , $current_interval );
+				$current_interval = $this->increment_interval( $current_interval );
+			}
+		}
+		
+		// update rankings
+		$current_interval = $this->increment_interval($last_sheet_interval);
+		while( $this->interval_compare( $current_interval , $last_interval ) < 1 ){
+			$this->doRankings($current_interval , "total");
+			$this->doRankings($current_interval , "monthly");
+			$this->doRankings($current_interval , "average");
+			$current_interval = $this->increment_interval( $current_interval );
+			
+			if(!( $current_interval->month <=3 && $current_interval->year != 2017 ) && ( $current_interval->month%3==0 ) ){
+				$q = monthToQuarter( $current_interval->month ) . " " . $current_interval->year;
+				
+				$this->doQuarterlyRankings( $q , 'average' );
+				$this->doQuarterlyRankings( $q , 'monthly' );
+				$this->doQuarterlyRankings( $q , 'total' );
+				
+			}
+		
+		
+		}
+		
+		// update spreadsheets
+		
+		
+	}
+	
     private function doRankings($interval, $field){
         global $wpdb;
-        
+        echo "doing Rankings:  ".$interval->label. " " . $field . "\n";
         $sql = "SELECT * from series_monthly_reports WHERE label='$interval->label' ORDER BY {$field}_downloads DESC";
         $rankings = $wpdb->get_results($sql);
         
@@ -320,12 +421,14 @@ die;
     }
    
     private function doQuarterlyRankings($q, $field){
+			
 	global $wpdb;
 
 	if(!in_array($field, array('total', 'monthly', 'average'))){
 		return false;
+	
 	}
-		
+	echo "Doing Quarterly Rankings: $q $field \n";
 	$sql = "SELECT * from series_quarterly_reports WHERE label='{$q}' ORDER BY {$field}_downloads DESC";
         $rankings = $wpdb->get_results($sql);
         
@@ -414,7 +517,7 @@ class SeriesAnalyticsMonthlyReport{
             
         }
 		else{
-			echo "\t\t {$this->interval->label} already run.";
+			echo "\t\t {$this->interval->label} already run. \n";
 		}
         
     }

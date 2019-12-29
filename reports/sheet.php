@@ -32,18 +32,27 @@ class SeriesReportSheet{
         
                                 ];
         
-    public function __construct($seriesId,$title=""){
+    public function __construct( $seriesId , $title = "" ){
         
         $this->seriesId = $seriesId;
-        
-        $series_sheet = $this->querySpreadsheet();
-
-        $this->title = $series_sheet?$series_sheet->title:$title;
-        $this->spreadsheetId = $series_sheet?$series_sheet->spreadsheetId:"";
-        $this->initialized = $series_sheet?$series_sheet->initialized:0;
-
         $this->client = getClient();
         $this->service= new Google_Service_Sheets($this->client);
+        
+        $series_sheet = $this->querySpreadsheet();
+        if($series_sheet){
+            $this->title = $series_sheet?$series_sheet->title:$title;
+            $this->spreadsheetId = $series_sheet?$series_sheet->spreadsheetId:"";
+            $this->initialized = $series_sheet?$series_sheet->initialized:0;
+        }
+        else{
+            $this->title = $title;
+
+            $this->init();    
+        }
+        
+        
+       
+        
 
     }
     
@@ -76,6 +85,7 @@ class SeriesReportSheet{
         $response = $this->service->spreadsheets_values->get($this->spreadsheetId, "Sheet1");
         return count($response->values);
     }
+    
     public function removeTopNRows($n=1){
         $start = 2;
         $end = $start+$n;
@@ -131,7 +141,7 @@ class SeriesReportSheet{
                         '{$this->seriesId}',
                         '{$this->spreadsheetId}',
                         '{$this->title}',
-                        {$this->initialized}
+                        '{$this->initialized}'
                  )";
         
         $wpdb->query($sql);
@@ -908,6 +918,16 @@ class SeriesReportSheet{
         
         return $spreadsheetId;
        
+    }
+    
+    
+    public function getLatestInterval(){
+        $range = 'Sheet1!A3';
+        $value = $this->service->spreadsheets_values->get( $this->spreadsheetId , $range );
+        if( "Google_Service_Sheets_ValueRange" == get_class($value) ){
+            return $value['values'][0][0];
+        }
+        return false;
     }
     
     
