@@ -406,8 +406,7 @@ class SeriesAnalyticsReports{
 				
 				$report = new SeriesAnalyticsMonthlyReport($podcast->term_id, $current_interval);
 				$report->loadFromQuery();
-var_dump($report);
-die;
+
 				if($current_interval->month%3==1){
 					$formats[]='borderBottom';
 				}
@@ -428,8 +427,9 @@ die;
 					}
 				}
 				
+								
 				sleep(10);    
-				
+				$current_interval = $this->increment_interval( $current_interval );
 			}
 		}
 		
