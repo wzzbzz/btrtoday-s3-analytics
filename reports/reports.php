@@ -354,7 +354,7 @@ class SeriesAnalyticsReports{
 			
 			// find out where we left off.
 			$last_sheet_interval = $this->intervalFromLabel( $sheet->getLatestInterval() );
-			sleep(5);
+			sleep(1);
 			
 			$current_interval = $this->increment_interval($last_sheet_interval);
 			
@@ -404,20 +404,20 @@ class SeriesAnalyticsReports{
 				$rows = [];
 				$formats=[];
 				
-				$report = new SeriesAnalyticsMonthlyReport($podcast->term_id, $interval);
+				$report = new SeriesAnalyticsMonthlyReport($podcast->term_id, $current_interval);
 				$report->loadFromQuery();
 var_dump($report);
 die;
-				if($interval->month%3==1){
+				if($current_interval->month%3==1){
 					$formats[]='borderBottom';
 				}
 				
 				$sheet->insertRow($report, $formats);
-				echo "\t$interval->label inserted\n";
+				echo "\t$current_interval->label inserted\n";
 				
-				if($interval->month%3==0){
-					if(!($interval->year==2017&&$interval->month==3)){
-						$q = monthToQuarter($interval->month)." ".$interval->year;
+				if($current_interval->month%3==0){
+					if(!($current_interval->year==2017&&$current_interval->month==3)){
+						$q = monthToQuarter($current_interval->month)." ".$current_interval->year;
 						$report = new SeriesAnalyticsQuarterlyReport($podcast->term_id, $q);
 						$report->loadFromQuery();
 						
