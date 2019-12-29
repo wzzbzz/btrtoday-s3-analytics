@@ -340,8 +340,8 @@ class SeriesAnalyticsReports{
     private function updateSheets(){
 
 		// update podcast data
-		/*$podcasts = get_podcast_series();
-		foreach($podcasts as $podcast){
+		$podcasts = get_podcast_series();
+		/*foreach($podcasts as $podcast){
 			echo $podcast->name."\n";
 			
 			try{
