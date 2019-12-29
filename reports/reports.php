@@ -387,9 +387,10 @@ class SeriesAnalyticsReports{
 		
 		// update spreadsheets
 		foreach($podcasts as $podcast){
-			
+			echo "updating {$podcqst->name}	sheet\n";
 			$current_interval = $this->increment_interval($last_sheet_interval);
-			
+			var_dump($this->interval_compare( $current_interval , $last_interval ) < 1 );
+			die;
 			while( $this->interval_compare( $current_interval , $last_interval ) < 1 ){
 				
 				# create sheet if not there.
