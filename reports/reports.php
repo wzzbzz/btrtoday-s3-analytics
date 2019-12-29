@@ -397,8 +397,8 @@ class SeriesAnalyticsReports{
 			$last_sheet_interval = $this->intervalFromLabel( $sheet->getLatestInterval() );
 			echo "updating {$podcast->name}	sheet\n";
 			$current_interval = $this->increment_interval($last_sheet_interval);
-			
-			while( $this->interval_compare( $current_interval , $last_sheet_interval ) < 1 ){
+			$last_interval = $this->getInterval();
+			while( $this->interval_compare( $current_interval , $last_interval ) < 1 ){
 				
 				# create sheet if not there.
 				$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
