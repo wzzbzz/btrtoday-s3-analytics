@@ -378,7 +378,7 @@ class SeriesAnalyticsReports{
 			}
 			
 		
-			sleep(1);
+			sleep(10);
 			
 			$current_interval = increment_interval($last_sheet_interval);
 			
@@ -574,8 +574,10 @@ class SeriesAnalyticsMonthlyReport{
     }
     
     public function calculateAverages(){
-        
-        $this->average_downloads = round($this->monthly_downloads / $this->monthly_episodes);
+        if(!empty($this->monthly_episodes) && $this->monthly_episodes > 0 )
+			$this->average_downloads = round($this->monthly_downloads / $this->monthly_episodes);
+		else
+			return 0;
         
     }
     public function monthlyEpisodesReport(){
