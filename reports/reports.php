@@ -281,7 +281,7 @@ class SeriesAnalyticsReports{
 		
 		
 		}
-		return;
+		
 		// update spreadsheets
 		foreach($podcasts as $podcast){
 			try{
@@ -770,7 +770,10 @@ class SeriesAnalyticsQuarterlyReport{
     
     public function calculateAverages(){
         
-        $this->average_downloads = round($this->monthly_downloads / $this->monthly_episodes);
+		if(!empty($this->monthly_episodes) && $this->monthly_episodes > 0)
+			$this->average_downloads = round($this->monthly_downloads / $this->monthly_episodes);
+		else
+			$this->average_downloads = 0;
         
     }
     public function monthlyEpisodesReport(){
