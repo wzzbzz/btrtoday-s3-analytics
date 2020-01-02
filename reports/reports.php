@@ -21,82 +21,29 @@ class SeriesAnalyticsReports{
     }
     public function __destruct(){}
     
+	// for one-off fixes.
 	public function fix(){
-		
+		$reports = array();
 		$podcasts = get_podcast_series();
-		
-		echo "\n";
-/*		foreach($podcasts as $podcast){
+		foreach($podcasts as $podcast){
+			$current = get_interval();
 			
-			echo "fixing {$podcast->name}\n";
-
-			$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
-                        if( !( $sheet->initialized == 1 ) ){
-                                echo "\tinitializing sheet:  {$podcast->name}\n";
-                                $sheet->init();
-                                $sheet->mark_initialized();
-                        }
-
-
-			$rows = $sheet->getRowCount();
-			echo "\t{$rows} found\n";
-			$over = $rows - 27;
-			if($over>0){
-				echo "\tdeleting top $over rows for {$podcast->name}\n";
-				$sheet->removeTopNRows($over);
+			$report = new SeriesAnalyticsMonthlyReport($podcast->term_id, $current);
+			if( !$report->hasBeenRun() ){
+				$report->run();
 			}
-			else{
-				echo "\tNo rows deleted\n";
-			}
+			$report->doDeltas();
 			
-			
-		
+			$reports	[] = $report;
 		}
-		
-*/		
-		
-//		$interval = $this->getInterval("01","2019");
-		
-//		$this->runInterval($interval);
-		
-//		$interval = $this->getInterval("02","2019");
-		
-//		$this->runInterval($interval);
-		
-//		$interval = $this->getInterval("03","2019");
-//		$this->runInterval($interval);
-	
-//                $interval = $this->getInterval("04","2019");
-//                $this->runInterval($interval);
-
-		$podcasts = get_podcast_series();
-		
-		$q = "Q1 2019";
-
-		$this->doQuarterlyRankings($q,'average');
-		$this->doQuarterlyRankings($q,'monthly');
-		$this->doQuarterlyRankings($q, 'total');
-
-		foreach($podcasts as $pod){
-			$r = new SeriesAnalyticsQuarterlyReport($pod->term_id, $q);
-		 	if(!$r->hasBeenRun()){
-				$r->run();
-			}
-		
-			$r->loadFromQuery();
-
-			$sheet = new SeriesReportSheet($pod->term_id, $pod->name);
-                        if( !( $sheet->initialized == 1 ) ){
-                                echo "\tinitializing sheet:  {$podcast->name}\n";
-                                $sheet->init();
-                                $sheet->mark_initialized();
-                        }
-			$sheet->updateExistingRow(4,$r);
+		usort($reports, build_sorter("monthly_delta_year"));
+		$monthly_delta_leaders = $reports;
+		foreach($monthly_delta_leaders as $i=>$leader){
+			$series = get_term($leader->series_id, 'podcast-series');
+			echo $i+1 . ": " . $series->name . " " . $leader->total_delta_month."\n";
 		}
-
-		echo "\n";
+		die;
 	}
-	
 	
 	public function runPodcastInterval($podcast, $interval){
 		
@@ -113,6 +60,7 @@ class SeriesAnalyticsReports{
 			
 			
 	}
+	
 	public function runInterval($interval){
 		
 		$podcasts = get_podcast_series();
@@ -145,7 +93,7 @@ class SeriesAnalyticsReports{
 				
 				$report = new SeriesAnalyticsMonthlyReport($podcast->term_id, $interval);
 				$report->loadFromQuery();
-
+				$report->doDeltas();
 				if($interval->month%3==1){
 					$formats[]='borderBottom';
 				}
@@ -158,7 +106,7 @@ class SeriesAnalyticsReports{
 						$q = monthToQuarter($interval->month)." ".$interval->year;
 						$report = new SeriesAnalyticsQuarterlyReport($podcast->term_id, $q);
 						$report->loadFromQuery();
-						
+						$report->doDeltas();
 						$formats = ['borderBottom','bold', 'italic'];
 
 						$sheet->insertRow($report, $formats);
@@ -169,28 +117,7 @@ class SeriesAnalyticsReports{
 				sleep(10);    
 			
 		}
-		
 			
-	}
-	
-	public function getInterval($month=null, $year=null){
-		
-		$interval = new stdClass();
-        $interval->month = $month?$month:(string) (date("m",time()) - 1);
-        $interval->year = $year?$year:date("Y",time());
-		
-		/* detect year change / month reset, and adjust interval. */
-		if($interval->month==0){
-			$interval->month=12;
-			$interval->year--;
-		}
-		
-		##$text = date("F", strtotime("2001-" . $month . "-01"));
-		
-		$interval->label = date("M",strtotime("2001-".$interval->month."-01"))." ".$interval->year;
-		
-		return $interval;
-		
 	}
 	
     public function run(){
@@ -225,7 +152,7 @@ class SeriesAnalyticsReports{
         foreach($podcasts as $podcast){
         
             if(empty($intervals)){
-                $intervals = $this->getIntervals($podcast->term_id);
+                $intervals = get_intervals($podcast->term_id);
             }
        
             foreach($intervals as $i=>$interval){
@@ -302,7 +229,7 @@ class SeriesAnalyticsReports{
 	// with month, year, and label members.
 	private function intervalFromLabel($label){
 		$parts = explode(" " ,$label);
-		$interval = $this->getInterval( date( "m" , strtotime( $parts[0] ." " . $parts[1] ) ), $parts[1] ) ;
+		$interval = get_interval( date( "m" , strtotime( $parts[0] ." " . $parts[1] ) ), $parts[1] ) ;
 		return $interval;
 		
 	}
@@ -324,54 +251,24 @@ class SeriesAnalyticsReports{
 		}
 	}
 	
-	
-	private function increment_interval( $interval ){
-		$interval->month++;
-		if( $interval->month > 12 ){
-			$interval->month = 1;
-			$interval->year++;
-		}
-		
-		$interval = $this->getInterval( $interval->month, $interval->year);
-		
-		return $interval;
-	}
-	
     private function updateSheets(){
 
 		// update podcast data
 		$podcasts = get_podcast_series();
-		/*foreach($podcasts as $podcast){
+		foreach($podcasts as $podcast){
 			echo $podcast->name."\n";
 			
-			try{
-				$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
-			}
-			catch(Google_Service_Exception $e){
-				var_dump($e);
-				die;
-			}
+			$this->updatePodcastReports( $podcast );
 			
-			// find out where we left off.
-			$last_sheet_interval = $this->intervalFromLabel( $sheet->getLatestInterval() );
-			sleep(1);
-			
-			$current_interval = $this->increment_interval($last_sheet_interval);
-			
-			$last_interval = $this->getInterval();
-			while( $this->interval_compare( $current_interval , $last_interval ) < 1 ){
-				$this->runPodcastInterval( $podcast , $current_interval );
-				$current_interval = $this->increment_interval( $current_interval );
-			}
 		}
 		
 		// update rankings
-		$current_interval = $this->increment_interval($last_sheet_interval);
+		$current_interval = increment_interval($last_sheet_interval);
 		while( $this->interval_compare( $current_interval , $last_interval ) < 1 ){
 			$this->doRankings($current_interval , "total");
 			$this->doRankings($current_interval , "monthly");
 			$this->doRankings($current_interval , "average");
-			$current_interval = $this->increment_interval( $current_interval );
+			$current_interval = increment_interval( $current_interval );
 			
 			if(!( $current_interval->month <=3 && $current_interval->year != 2017 ) && ( $current_interval->month%3==0 ) ){
 				$q = monthToQuarter( $current_interval->month ) . " " . $current_interval->year;
@@ -383,8 +280,8 @@ class SeriesAnalyticsReports{
 			}
 		
 		
-		}*/
-		
+		}
+		return;
 		// update spreadsheets
 		foreach($podcasts as $podcast){
 			try{
@@ -396,8 +293,8 @@ class SeriesAnalyticsReports{
 			}
 			$last_sheet_interval = $this->intervalFromLabel( $sheet->getLatestInterval() );
 			echo "updating {$podcast->name}	sheet\n";
-			$current_interval = $this->increment_interval($last_sheet_interval);
-			$last_interval = $this->getInterval();
+			$current_interval = increment_interval($last_sheet_interval);
+			$last_interval = get_interval();
 			while( $this->interval_compare( $current_interval , $last_interval ) < 1 ){
 				
 				# create sheet if not there.
@@ -437,12 +334,60 @@ class SeriesAnalyticsReports{
 				
 								
 				sleep(10);    
-				$current_interval = $this->increment_interval( $current_interval );
+				$current_interval = increment_interval( $current_interval );
 			}
 		}
 		
 	}
 	
+	private function updatePodcastReports($podcast){
+		try{
+				$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
+			}
+			catch(Google_Service_Exception $e){
+				var_dump($e);
+				die;
+			}
+			
+			// find out where we left off.
+			$last_sheet_interval = $sheet->getLatestInterval();
+			
+			// podcast sheet is empty
+			if(empty($last_sheet_interval)){
+				// find first interval get oldest post
+				$sql = "SELECT
+							post_date
+						FROM wp_posts p
+							JOIN wp_term_relationships tr on tr.object_id = p.ID
+							JOIN wp_term_taxonomy tt on tt.term_taxonomy_id = tr.term_taxonomy_id
+							JOIN wp_terms t on t.term_id = tt.term_id
+						WHERE t.term_id = '{$podcast->term_id}'
+						ORDER BY p.post_date ASC
+						LIMIT 0,1";
+				global $wpdb;
+				$results = $wpdb->get_results($sql);
+				$date = $results[0]->post_date;
+				$month = date("m", strtotime($date));
+				$year = date("Y", strtotime($date));
+				$last_sheet_interval = get_interval($month, $year);
+				
+
+			}
+			else{
+				$last_sheet_interval = $this->intervalFromLabel( $sheet->getLatestInterval() );
+			}
+			
+		
+			sleep(1);
+			
+			$current_interval = increment_interval($last_sheet_interval);
+			
+			$last_interval = get_interval();
+			while( $this->interval_compare( $current_interval , $last_interval ) < 1 ){
+				$this->runPodcastInterval( $podcast , $current_interval );
+				$current_interval = increment_interval( $current_interval );
+			}
+	}
     private function doRankings($interval, $field){
         global $wpdb;
         echo "doing Rankings:  ".$interval->label. " " . $field . "\n";
@@ -541,11 +486,17 @@ class SeriesAnalyticsMonthlyReport{
     public $interval;
     public $total_downloads;
     public $total_rank;
+	public $total_delta;
+	public $total_month_delta_rank;
     public $monthly_downloads;
     public $monthly_rank;
+	public $monthly_delta;
+	public $monthly_delta_rank;
     public $monthly_episodes;
     public $average_downloads;
     public $average_rank;
+	public $average_delta;
+	public $average_delta_rank;
     
     public function __construct($series_id,$interval){
         $this->series_id = $series_id;
@@ -684,6 +635,37 @@ class SeriesAnalyticsMonthlyReport{
         }
         
     }
+	
+	public function doDeltas(){
+		if(empty($this->total_downloads)){
+			$this->loadFromQuery();
+		}
+		
+		$monthly_delta_interval = decrement_interval($this->interval);
+		$monthly_delta_report = new SeriesAnalyticsMonthlyReport($this->series_id, $monthly_delta_interval);
+		$monthly_delta_report->loadFromQuery();
+		
+		$yearly_delta_interval = decrement_interval($this->interval, 11);
+		
+		$yearly_delta_report = new SeriesAnalyticsMonthlyReport($this->series_id, $yearly_delta_interval);
+		
+		$this->total_delta_month = $this->doDelta($monthly_delta_report, "total_downloads");
+		$this->total_delta_year = $this->doDelta($yearly_delta_report, "total_downloads");
+		$this->monthly_delta_month = $this->doDelta($monthly_delta_report, "monthly_downloads");
+		$this->monthly_delta_year = $this->doDelta($yearly_delta_report, "monthly_downloads");
+		$this->average_delta_month = $this->doDelta($monthly_delta_report, "average_downloads");
+		$this->average_delta_month_year = $this->doDelta($yearly_delta_report, "average_downloads");
+
+		
+	}
+	
+	public function doDelta($cmp_report, $field){
+		
+		if(empty($cmp_report->$field)){
+			return false;
+		}
+		return ($this->$field /$cmp_report->$field);
+	}
 }
 
 
@@ -863,4 +845,65 @@ function monthToQuarter($month){
    $quarter = floor($month/4) + 1;
    
    return "Q".$quarter;
+}
+
+
+function increment_interval( $interval, $steps=1 ){
+	for( $i=0 ; $i < $steps ; $i++ ){
+		$interval->month++;
+		if( $interval->month > 12 ){
+			$interval->month = 1;
+			$interval->year++;
+		}
+	}
+	$interval = get_interval( $interval->month, $interval->year);
+	
+	return $interval;
+}
+
+function decrement_interval( $interval , $steps = 1 ){
+	
+	for( $i = 0 ; $i < $steps ; $i++ ){
+		$interval->month--;
+		if( $interval->month < 1 ){
+			$interval->month = 12;
+			$interval->year--;
+		}
+	}
+	$_interval = get_interval( $interval->month, $interval->year);
+
+	return $_interval;
+}
+
+function get_interval($month=null, $year=null){
+		
+		$interval = new stdClass();
+        $interval->month = $month?$month:(string) (date("m",time()) - 1);
+        $interval->year = $year?$year:date("Y",time());
+		
+		/* detect year change / month reset, and adjust interval. */
+		if($interval->month==0){
+			$interval->month=12;
+			$interval->year--;
+		}
+		
+		##$text = date("F", strtotime("2001-" . $month . "-01"));
+		
+		$interval->label = date("M",strtotime("2001-".$interval->month."-01"))." ".$interval->year;
+		
+		return $interval;
+		
+	}
+
+
+function build_sorter($key) {
+    return function ($a, $b) use ($key) {
+		if($a->$key === $b->$key){
+			return 0;
+		}
+        else{
+			return ($a->$key > $b->$key)?1:-1;
+		}
+};
+
 }
