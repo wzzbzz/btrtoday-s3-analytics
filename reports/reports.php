@@ -5,6 +5,14 @@ require __DIR__ . '/sheet.php';
 
 
 
+
+
+class NetworkAnalyticsReports{
+	public function __construct(){}
+	public function __destruct(){}
+	
+}
+
 /*
  *  SeriesAnalyticsReports
  *
@@ -14,13 +22,24 @@ require __DIR__ . '/sheet.php';
 class SeriesAnalyticsReports{
 
     public $reports = [];
+	public $first_interval;
 
     public function __construct(){
-
-        
+		$this->setFirstInterval();
     }
+	
     public function __destruct(){}
     
+	public function setFirstInterval(){
+		
+		$sql = "SELECT MIN(request_time) as start_date FROM s3logs";
+		global $wpdb;
+		$results = $wpdb->get_results($sql);
+		$date = $results[0]->start_date;
+		$this->first_interval = dateToInterval($date);
+		
+	}
+	
 	// for one-off fixes.
 	public function fix(){
 		$reports = array();
@@ -33,8 +52,7 @@ class SeriesAnalyticsReports{
 				$report->run();
 			}
 			$report->doDeltas();
-			
-			$reports	[] = $report;
+			$reports[] = $report;
 		}
 		usort($reports, build_sorter("monthly_delta_year"));
 		$monthly_delta_leaders = $reports;
@@ -70,6 +88,7 @@ class SeriesAnalyticsReports{
 			$this->runPodcastInterval( $podcast, $interval );
            
 		}
+		
 		echo "reports run\n";
 		
 		$this->doRankings($interval, "total");
@@ -126,10 +145,13 @@ class SeriesAnalyticsReports{
 		echo "Running BTRtoday Monthly Google Sheets Update\n";
 		
         
-		$this->updateSheets();
-		die;
+		$this->updateReports();
+		
 		$this->doRankings();
-		$this->doQuarterlyRankings();
+		
+		//$this->doQuarterlyRankings();
+		$this->updateSheets();
+		
 		return;
         echo "Running Podcast Reports (".count($podcasts).")";
         foreach($podcasts as $i=>$podcast){
@@ -234,55 +256,135 @@ class SeriesAnalyticsReports{
 		
 	}
 	
-	// compare two intervals.
-	// -1, interval1 < interval2
-	// 0 interval1 == interval2
-	// 1 interval1 > interval2
-	private function interval_compare( $interval1 , $interval2 ){
-		
-		if( $interval1->year == $interval2->year ){
-			if( $interval1->month == $interval2->month ){
-				return 0;
-			}
-			return ($interval1->month > $interval2->month)?1:-1;
-		}
-		else{
-			return ( $interval1->year > $interval2->year)?1:-1;
-		}
-	}
-	
-    private function updateSheets(){
+
+
+
+    private function updateReports(){
 
 		// update podcast data
 		$podcasts = get_podcast_series();
 		foreach($podcasts as $podcast){
 			echo $podcast->name."\n";
-			
 			$this->updatePodcastReports( $podcast );
 			
 		}
+		return;
 		
-		// update rankings
-		$current_interval = increment_interval($last_sheet_interval);
-		while( $this->interval_compare( $current_interval , $last_interval ) < 1 ){
-			$this->doRankings($current_interval , "total");
-			$this->doRankings($current_interval , "monthly");
-			$this->doRankings($current_interval , "average");
+		
+		
+	}
+	
+	private function updatePodcastReports($podcast){
+		
+		
+		// find first interval get oldest post
+		$sql = "SELECT
+					post_date
+				FROM wp_posts p
+					JOIN wp_term_relationships tr on tr.object_id = p.ID
+					JOIN wp_term_taxonomy tt on tt.term_taxonomy_id = tr.term_taxonomy_id
+					JOIN wp_terms t on t.term_id = tt.term_id
+				WHERE t.term_id = '{$podcast->term_id}'
+				ORDER BY p.post_date ASC
+				LIMIT 0,1";
+				
+		global $wpdb;
+		$results = $wpdb->get_results($sql);
+		
+		$date = $results[0]->post_date;
+		$month = date("m", strtotime($date));
+		$year = date("Y", strtotime($date));
+		$first_post_interval = get_interval( $month , $year );
+		
+		$cmp = interval_compare($first_post_interval, $this->first_interval);
+		
+		if($cmp<0){
+			$current_interval = clone $this->first_interval;
+		}
+		else{
+			$current_interval = $first_post_interval;
+		}
+
+		$last_interval = get_interval();
+		
+		while( interval_compare( $current_interval , $last_interval ) < 1 ){
+			
+			$this->runPodcastInterval( $podcast , $current_interval );
 			$current_interval = increment_interval( $current_interval );
 			
-			if(!( $current_interval->month <=3 && $current_interval->year != 2017 ) && ( $current_interval->month%3==0 ) ){
-				$q = monthToQuarter( $current_interval->month ) . " " . $current_interval->year;
-				
-				$this->doQuarterlyRankings( $q , 'average' );
-				$this->doQuarterlyRankings( $q , 'monthly' );
-				$this->doQuarterlyRankings( $q , 'total' );
-				
-			}
-		
-		
 		}
 		
-		// update spreadsheets
+	}
+	
+    private function doRankings(){
+		
+		$fields = array("total","monthly","average");
+		$last_interval = get_interval();
+		
+		foreach($fields as $field){
+			
+			$interval = clone $this->first_interval;
+			
+			while ( interval_compare ($interval , $last_interval ) < 1 ){
+					
+				global $wpdb;
+				echo "doing Rankings:  ".$interval->label. " " . $field . "\n";
+				$sql = "SELECT * from series_monthly_reports WHERE label='$interval->label' ORDER BY {$field}_downloads DESC";
+				$rankings = $wpdb->get_results($sql);
+				
+				
+				foreach($rankings as $i=>$rowinfo){
+						$rank=$i+1;
+						$sql = "UPDATE series_monthly_reports SET {$field}_rank='$rank' WHERE ID='{$rowinfo->ID}'";
+						$wpdb->query($sql);
+					}
+				
+				
+				#now do the quarterly ones. yes this implies refactor is necessary.
+				$q = monthToQuarter($interval->month). " " .$interval->year;
+				echo "doing Rankings {$q}:\n";
+				$sql = "SELECT * from series_quarterly_reports WHERE label='{$q}' ORDER BY {$field}_downloads DESC";
+				$rankings = $wpdb->get_results($sql);
+				
+				
+				foreach($rankings as $i=>$rowinfo){
+						$rank=$i+1;
+						$sql = "UPDATE series_quarterly_reports SET {$field}_rank='$rank' WHERE ID='{$rowinfo->ID}'";
+						$wpdb->query($sql);
+					}
+					
+			
+				$interval = increment_interval( $interval );
+			}
+		}
+    }
+   
+    private function doQuarterlyRankings($q, $field){
+			
+	global $wpdb;
+
+	if(!in_array($field, array('total', 'monthly', 'average'))){
+		return false;
+	
+	}
+	echo "Doing Quarterly Rankings: $q $field \n";
+	$sql = "SELECT * from series_quarterly_reports WHERE label='{$q}' ORDER BY {$field}_downloads DESC";
+        $rankings = $wpdb->get_results($sql);
+        
+        
+        foreach($rankings as $i=>$rowinfo){
+                $rank=$i+1;
+                $sql = "UPDATE series_quarterly_reports SET {$field}_rank='$rank' WHERE ID='{$rowinfo->ID}'";
+                $wpdb->query($sql);
+            }
+			
+	}
+
+	public function updateSheets(){
+		
+		$podcasts = get_podcast_series();
+		
+	// update spreadsheets
 		foreach($podcasts as $podcast){
 			try{
 				$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
@@ -295,7 +397,7 @@ class SeriesAnalyticsReports{
 			echo "updating {$podcast->name}	sheet\n";
 			$current_interval = increment_interval($last_sheet_interval);
 			$last_interval = get_interval();
-			while( $this->interval_compare( $current_interval , $last_interval ) < 1 ){
+			while( interval_compare( $current_interval , $last_interval ) < 1 ){
 				
 				# create sheet if not there.
 				$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
@@ -337,109 +439,8 @@ class SeriesAnalyticsReports{
 				$current_interval = increment_interval( $current_interval );
 			}
 		}
+	}
 		
-	}
-	
-	private function updatePodcastReports($podcast){
-		try{
-				$sheet = new SeriesReportSheet($podcast->term_id, $podcast->name);
-			}
-			catch(Google_Service_Exception $e){
-				var_dump($e);
-				die;
-			}
-			
-			// find out where we left off.
-			$last_sheet_interval = $sheet->getLatestInterval();
-			
-			// podcast sheet is empty
-			if(empty($last_sheet_interval)){
-				// find first interval get oldest post
-				$sql = "SELECT
-							post_date
-						FROM wp_posts p
-							JOIN wp_term_relationships tr on tr.object_id = p.ID
-							JOIN wp_term_taxonomy tt on tt.term_taxonomy_id = tr.term_taxonomy_id
-							JOIN wp_terms t on t.term_id = tt.term_id
-						WHERE t.term_id = '{$podcast->term_id}'
-						ORDER BY p.post_date ASC
-						LIMIT 0,1";
-				global $wpdb;
-				$results = $wpdb->get_results($sql);
-				$date = $results[0]->post_date;
-				$month = date("m", strtotime($date));
-				$year = date("Y", strtotime($date));
-				$last_sheet_interval = get_interval($month, $year);
-				
-
-			}
-			else{
-				$last_sheet_interval = $this->intervalFromLabel( $sheet->getLatestInterval() );
-			}
-			
-		
-			sleep(10);
-			
-			$current_interval = increment_interval($last_sheet_interval);
-			
-			$last_interval = get_interval();
-			while( $this->interval_compare( $current_interval , $last_interval ) < 1 ){
-				$this->runPodcastInterval( $podcast , $current_interval );
-				$current_interval = increment_interval( $current_interval );
-			}
-	}
-    private function doRankings($interval, $field){
-        global $wpdb;
-        echo "doing Rankings:  ".$interval->label. " " . $field . "\n";
-        $sql = "SELECT * from series_monthly_reports WHERE label='$interval->label' ORDER BY {$field}_downloads DESC";
-        $rankings = $wpdb->get_results($sql);
-        
-        
-        foreach($rankings as $i=>$rowinfo){
-                $rank=$i+1;
-                $sql = "UPDATE series_monthly_reports SET {$field}_rank='$rank' WHERE ID='{$rowinfo->ID}'";
-                $wpdb->query($sql);
-            }
-        
-        
-        #now do the quarterly ones. yes this implies refactor is necessary.
-        $q = monthToQuarter($interval->month). " " .$interval->year;
-        $sql = "SELECT * from series_quarterly_reports WHERE label='{$q}' ORDER BY {$field}_downloads DESC";
-        $rankings = $wpdb->get_results($sql);
-        
-        
-        foreach($rankings as $i=>$rowinfo){
-                $rank=$i+1;
-                $sql = "UPDATE series_quarterly_reports SET {$field}_rank='$rank' WHERE ID='{$rowinfo->ID}'";
-                $wpdb->query($sql);
-            }
-            
-        return;
-        
-    }
-   
-    private function doQuarterlyRankings($q, $field){
-			
-	global $wpdb;
-
-	if(!in_array($field, array('total', 'monthly', 'average'))){
-		return false;
-	
-	}
-	echo "Doing Quarterly Rankings: $q $field \n";
-	$sql = "SELECT * from series_quarterly_reports WHERE label='{$q}' ORDER BY {$field}_downloads DESC";
-        $rankings = $wpdb->get_results($sql);
-        
-        
-        foreach($rankings as $i=>$rowinfo){
-                $rank=$i+1;
-                $sql = "UPDATE series_quarterly_reports SET {$field}_rank='$rank' WHERE ID='{$rowinfo->ID}'";
-                $wpdb->query($sql);
-            }
-			
-	}
-
-
     private function getIntervals($series_id){
         global $wpdb;
         
@@ -574,10 +575,8 @@ class SeriesAnalyticsMonthlyReport{
     }
     
     public function calculateAverages(){
-        if(!empty($this->monthly_episodes) && $this->monthly_episodes > 0 )
-			$this->average_downloads = round($this->monthly_downloads / $this->monthly_episodes);
-		else
-			return 0;
+        
+        $this->average_downloads = round($this->monthly_downloads / $this->monthly_episodes);
         
     }
     public function monthlyEpisodesReport(){
@@ -771,11 +770,10 @@ class SeriesAnalyticsQuarterlyReport{
     }
     
     public function calculateAverages(){
-        
-		if(!empty($this->monthly_episodes) && $this->monthly_episodes > 0)
-			$this->average_downloads = round($this->monthly_downloads / $this->monthly_episodes);
-		else
+        if(empty($this->monthly_episodes) || $this->monthly_episodes == 0 ){
 			$this->average_downloads = 0;
+		}
+        $this->average_downloads = round($this->monthly_downloads / $this->monthly_episodes);
         
     }
     public function monthlyEpisodesReport(){
@@ -852,6 +850,9 @@ function monthToQuarter($month){
    return "Q".$quarter;
 }
 
+function dateToInterval($strdate){
+	return get_interval( date( "m" , strtotime( $strdate ) ), date( "Y" , strtotime( $strdate ) ) );
+}
 
 function increment_interval( $interval, $steps=1 ){
 	for( $i=0 ; $i < $steps ; $i++ ){
@@ -909,6 +910,24 @@ function build_sorter($key) {
         else{
 			return ($a->$key > $b->$key)?1:-1;
 		}
-};
+	};
 
 }
+
+	// compare two intervals.
+	// -1, interval1 < interval2
+	// 0 interval1 == interval2
+	// 1 interval1 > interval2
+ function interval_compare( $interval1 , $interval2 ){
+		
+	if( $interval1->year == $interval2->year ){
+		if( $interval1->month == $interval2->month ){
+			return 0;
+		}
+		return ($interval1->month > $interval2->month)?1:-1;
+	}
+	else{
+		return ( $interval1->year > $interval2->year)?1:-1;
+	}
+}
+
