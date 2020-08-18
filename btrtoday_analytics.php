@@ -198,8 +198,8 @@ class BTRtoday_Analytics{
 		$role = $roles[0];
 		
 		if($role!="administrator"){
-			$user_id = get_current_user_id();
-			$user_series = get_user_podcasts($user_id);
+			$user = BTRtoday_StaffFactory::fromId(get_current_user_id());
+			$user_series = $user->series();
 			
 			if(empty($user_series)){
 				echo "<h3>Current User Not A Podcaster";
@@ -207,18 +207,18 @@ class BTRtoday_Analytics{
 			}
 		}
 		else{
-			$user_series = get_podcast_series(false);
+			$user_series = BTRtoday_Podcasts::getActive();
 		}
 		
-		$current_series = empty($_GET['podcast'])?$user_series[0]:get_the_podcast(get_term($_GET['podcast']));
+		$current_series = empty($_GET['podcast'])?$user_series[0]:BTRtoday_PodcastSeriesFactory::fromID($_GET['podcast']);
 		
-		$reports = $this->getPodcastSeriesPostReport($current_series->term_id, $this->start, $this->end);
+		$reports = $this->getPodcastSeriesPostReport($current_series->id(), $this->start, $this->end);
 	
 		?>
 		
 		<div class="wrap episodes">
 		
-		<h1><?php echo $current_series->name;?></h1>
+		<h1><?php echo $current_series->name();?></h1>
 
 		<div style="float:left;padding-right:40px;">
 			
@@ -228,8 +228,8 @@ class BTRtoday_Analytics{
 				<h4>select new series</h4>
 				<select name="podcast">
 					<?php foreach($user_series as $series):
-					$selected = ($series->term_id ==$_GET['podcast'])?"selected":"";?>
-					<option value="<?php echo $series->term_id;?>" <?php echo $selected;?>><?php echo $series->name;?></option>
+					$selected = ($series->id() ==$_GET['podcast'])?"selected":"";?>
+					<option value="<?php echo $series->id();?>" <?php echo $selected;?>><?php echo $series->name();?></option>
 					<?php endforeach;?>
 				</select>	
 				<?php }?>
