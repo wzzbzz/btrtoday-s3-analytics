@@ -12,7 +12,7 @@ Text Domain: dontknow
 Domain Path: /languages
 */
 
-
+namespace btrtoday\Analytics;
 
 function by_subarray_count($a,$b){
     if(count($a["post_count"]) == count($b["post_count"]))
@@ -20,7 +20,7 @@ function by_subarray_count($a,$b){
     return count($a["post_count"])<count($b["post_count"])?1:-1;
 }
 
-class BTRtoday_Analytics{
+class Analytics{
     
 	const default_page_slug = "btrtoday_analytics";
     //const base = "settings_page_btrtoday_default_recommended_posts";
@@ -198,7 +198,7 @@ class BTRtoday_Analytics{
 		$role = $roles[0];
 		
 		if($role!="administrator"){
-			$user = BTRtoday_StaffFactory::fromId(get_current_user_id());
+			$user = \btrtoday\Staff\StaffFactory::fromId(get_current_user_id());
 			$user_series = $user->series();
 			
 			if(empty($user_series)){
@@ -207,10 +207,10 @@ class BTRtoday_Analytics{
 			}
 		}
 		else{
-			$user_series = BTRtoday_Podcasts::getActive();
+			$user_series = \btrtoday\Listen\Podcasts::getActive();
 		}
 		
-		$current_series = empty($_GET['podcast'])?$user_series[0]:BTRtoday_PodcastSeriesFactory::fromID($_GET['podcast']);
+		$current_series = empty($_GET['podcast'])?$user_series[0]:\btrtoday\TaxonomyTerms\TaxonomyTermFactory::fromID($_GET['podcast']);
 		
 		$reports = $this->getPodcastSeriesPostReport($current_series->id(), $this->start, $this->end);
 	
@@ -468,17 +468,24 @@ class BTRtoday_Analytics{
 	private function render_overview(){
 		set_time_limit(0);
 		
-		$series = get_podcast_series(false);
+		$series_objects = \btrtoday\Listen\Podcasts::getAll();
 		
 		$total = $this->total_requests_range($this->start, $this->end);
-		foreach($series as $i=>$s){
-			
-			$series[$i]->total_range_downloads = $this->count_all_series_requests_range($s->term_id, $this->start, $this->end);
-			if($s->is_active){
-				$active_total+= $series[$i]->total_range_downloads;
-				$series[$i]->range_episode_count = $this->count_published_series_posts_in_range($s->term_id, $this->start, $this->end);
-				$series[$i]->range_episode_downloads = $this->count_published_series_posts_requests_in_range($s->term_id, $this->start, $this->end);
+		
+		$series = [];
+		
+		foreach($series_objects as $i=>$series_object ){
+			$s = new \stdClass();
+			$s->series_object = $series_object;
+
+			$s->total_range_downloads = $this->count_all_series_requests_range( $s->series_object->id() , $this->start, $this->end);
+			if($series_object->is_active()){
+				$active_total+= $s->total_range_downloads;
+				$s->range_episode_count = $this->count_published_series_posts_in_range($series_object->id() , $this->start, $this->end);
+				$s->range_episode_downloads = $this->count_published_series_posts_requests_in_range($series_object->id() , $this->start, $this->end);
 			}
+			
+			$series[] = $s;
 			
 			
 		}
@@ -530,10 +537,10 @@ class BTRtoday_Analytics{
 		<?php foreach ($series as $s):?>
 				<tr>
 					<td style="text-align:left">
-						<?php if($s->is_active):?>
-						<a href="<?php echo admin_url(); ?>/admin.php?page=series_analytics&podcast=<?php echo $s->term_id;?>"><?php echo $s->name;?></a>
+						<?php if($s->series_object->is_active()):?>
+						<a href="<?php echo admin_url(); ?>/admin.php?page=series_analytics&podcast=<?php echo $s->series_object->id();?>"><?php echo $s->series_object->name();?></a>
 						<?php else:?>
-						<?php echo $s->name;?> ** inactive
+						<?php echo $s->series_object->name();?> ** inactive
 						<?php endif;?>
 					</td>
 					<td style="text-align:center"><?php echo $s->total_range_downloads;?></td>
@@ -549,7 +556,7 @@ class BTRtoday_Analytics{
 	}
     
     private function render_series_detail(){
-         $this->data;
+         
          $threshold = 1;
          function filter_data($data,$threshold){
             
@@ -984,7 +991,7 @@ class BTRtoday_Analytics{
 		
 		$sql = "SELECT COUNT(*) as total FROM s3logs WHERE request_key='{$filename}'";
 		
-		$report = new stdClass();
+		$report = new \stdClass();
 		$report->title = $podcast->post_title;
 		$report->post_date = date("M d, Y",strtotime($podcast->post_date));
 		$results = $wpdb->get_results($sql);
@@ -1032,4 +1039,4 @@ class BTRtoday_Analytics{
 }
 
 
-$btr_analytics = new BTRtoday_Analytics();
+$btr_analytics = new Analytics();
