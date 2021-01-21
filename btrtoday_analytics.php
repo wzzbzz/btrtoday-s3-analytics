@@ -200,7 +200,6 @@ class Analytics{
 		if($role!="administrator"){
 			$user = \btrtoday\Staff\StaffFactory::fromId(get_current_user_id());
 			$user_series = $user->series();
-			
 			if(empty($user_series)){
 				echo "<h3>Current User Not A Podcaster";
 				return;
@@ -987,13 +986,13 @@ class Analytics{
 	function getPodcastReport($podcast){
 		global $wpdb;
 		
-		$filename = basename($podcast->src);
+		$filename = basename($podcast->src());
 		
 		$sql = "SELECT COUNT(*) as total FROM s3logs WHERE request_key='{$filename}'";
 		
 		$report = new \stdClass();
-		$report->title = $podcast->post_title;
-		$report->post_date = date("M d, Y",strtotime($podcast->post_date));
+		$report->title = $podcast->title();
+		$report->post_date = date("M d, Y",strtotime($podcast->date()));
 		$results = $wpdb->get_results($sql);
 		
 		$report->downloads = $wpdb->get_results($sql)[0]->total;
@@ -1022,11 +1021,11 @@ class Analytics{
 		
 		$reports = [];
 		foreach($results as $report){
-			$post = postify(get_post($report->post_id));
+			$post = \btrtoday\Posts\PostsFactory::fromID($report->post_id);
 			
-			$report->title = $post->post_title;
-			$report->post_date =date("m-d-Y",strtotime($post->post_date));
-			$report->url = $post->permalink;
+			$report->title = $post->title();
+			$report->post_date =date("m-d-Y",strtotime($post->date()));
+			$report->url = $post->url();
 			$totalReport = $this->getPodcastReport($post);
 			$report->total_downloads = $totalReport->downloads;
 			
